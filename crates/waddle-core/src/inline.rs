@@ -204,9 +204,24 @@ fn find(chars: &[char], from: usize, pat: &[char]) -> Option<usize> {
 }
 
 /// A `[anchor](dest)` at `i`: the index of `]` and of the closing `)`.
-/// Parentheses inside the destination balance, as in docling's scanner.
+/// Brackets inside the anchor and parentheses inside the destination
+/// balance, as in CommonMark, so `[[ 1 ]](#note)` is one link whose text is
+/// `[ 1 ]` and `[ [a](u) ]` is a link inside plain brackets.
 fn link_at(chars: &[char], i: usize) -> Option<(usize, usize)> {
-    let anchor_end = find(chars, i + 1, &[']'])?;
+    let mut depth = 0usize;
+    let mut anchor_end = None;
+    for (k, &c) in chars.iter().enumerate().skip(i + 1) {
+        match c {
+            '[' => depth += 1,
+            ']' if depth == 0 => {
+                anchor_end = Some(k);
+                break;
+            }
+            ']' => depth -= 1,
+            _ => {}
+        }
+    }
+    let anchor_end = anchor_end?;
     if chars.get(anchor_end + 1) != Some(&'(') {
         return None;
     }
@@ -378,6 +393,25 @@ mod tests {
     }
 
     #[test]
+    fn brackets_inside_an_anchor_balance() {
+        let runs = from_markdown("see [[ 1 ]](#n) and [ [a](u) ]");
+        let shape: Vec<(&str, Option<&str>)> = runs
+            .iter()
+            .map(|r| (r.text.as_str(), r.href.as_deref()))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                ("see ", None),
+                ("[ 1 ]", Some("#n")),
+                (" and [ ", None),
+                ("a", Some("u")),
+                (" ]", None),
+            ]
+        );
+    }
+
+    #[test]
     fn unmatched_markers_stay_literal() {
         assert_eq!(from_markdown("2 * 3 ** 4"), vec![plain("2 * 3 ** 4")]);
         assert_eq!(from_markdown("a [b] (c)"), vec![plain("a [b] (c)")]);
@@ -405,46 +439,80 @@ mod tests {
 /// The runs of a node that carries both structured runs and the Markdown
 /// text docling built from them.
 ///
-/// The runs are the text: exact characters, exact spacing, and the underline
-/// and script that have no Markdown marker. The Markdown is where the
-/// hyperlinks are, since [`InlineRun`] has no field for one, and its spacing
-/// is docling's own, with a space inserted at every run boundary. So the runs
-/// are kept as they are and the link targets are copied onto them, aligned
-/// character by character with whitespace set aside; a space between two
-/// links, or between a link and plain text, is linked only when both sides
-/// are. If the two sides do not align, the runs are used as they are.
+/// The runs are the text: exact characters and the underline and script
+/// that have no Markdown marker. The Markdown is where the hyperlinks are,
+/// since [`InlineRun`] has no field for one, and where the spacing between
+/// runs is when a reader trims its runs: the DOCX reader hands back `Some`,
+/// `italic`, `bold` and the Markdown `Some *italic* **bold**`, while the ODF
+/// reader keeps `Some `, `italic`, ` bold`. The Markdown's own spacing is
+/// docling's, with a space at every run boundary, so it is consulted only
+/// for a paragraph whose runs carry no edge whitespace at all, and then only
+/// for whether there is a space between two runs, never how many. The two
+/// sides are aligned character by character with whitespace set aside; link
+/// targets are copied onto the runs, and a single space goes between two
+/// trimmed runs where the Markdown has one. A space between two links, or
+/// between a link and plain text, is linked only when both sides are. If
+/// the two sides do not align, the runs are used as they are.
 pub fn from_group(md_text: &str, runs: &[InlineRun]) -> Vec<Run> {
     let structured = from_inline_runs(runs);
     let scanned = from_markdown(md_text);
-    let hrefs: Vec<(char, Option<&str>)> = scanned
-        .iter()
-        .flat_map(|r| {
-            r.text
-                .chars()
-                .filter(|c| !c.is_whitespace())
-                .map(move |c| (c, r.href.as_deref()))
-        })
-        .collect();
+    // Each non-whitespace character of the Markdown: its link, and whether
+    // whitespace follows it.
+    let mut marks: Vec<(char, Option<&str>, bool)> = Vec::new();
+    for run in &scanned {
+        for c in run.text.chars() {
+            if c.is_whitespace() {
+                if let Some(last) = marks.last_mut() {
+                    last.2 = true;
+                }
+            } else {
+                marks.push((c, run.href.as_deref(), false));
+            }
+        }
+    }
     let aligned = structured
         .iter()
         .flat_map(|r| r.text.chars().filter(|c| !c.is_whitespace()))
-        .eq(hrefs.iter().map(|&(c, _)| c));
+        .eq(marks.iter().map(|&(c, _, _)| c));
     if !aligned {
         return structured;
     }
-    let mut out = Vec::new();
+    // A reader that keeps spacing in its runs leaves whitespace at some
+    // run's edge; one that trims them never does. Only the second needs
+    // spaces put back, and only where the Markdown has one.
+    let trimmed = structured.len() > 1
+        && structured.iter().all(|r| {
+            !r.text.starts_with(char::is_whitespace) && !r.text.ends_with(char::is_whitespace)
+        });
+    let mut out: Vec<Run> = Vec::new();
     let mut at = 0;
     // The link of the previous character, across run boundaries.
     let mut prev: Option<&str> = None;
     for run in structured {
+        let touches = trimmed
+            && at > 0
+            && marks[at - 1].2
+            && !run.text.starts_with(char::is_whitespace)
+            && out
+                .last()
+                .is_some_and(|last| !last.text.ends_with(char::is_whitespace));
+        if touches {
+            let next = marks.get(at).and_then(|&(_, h, _)| h);
+            let href = if prev == next { prev } else { None };
+            out.push(Run {
+                href: href.map(str::to_string),
+                ..Run::default()
+            });
+            out.last_mut().expect("just pushed").text.push(' ');
+        }
         let mut piece = String::new();
         let mut current: Option<Option<&str>> = None;
         for c in run.text.chars() {
             let href = if c.is_whitespace() {
-                let next = hrefs.get(at).and_then(|&(_, h)| h);
+                let next = marks.get(at).and_then(|&(_, h, _)| h);
                 if prev == next { prev } else { None }
             } else {
-                let (_, h) = hrefs[at];
+                let (_, h, _) = marks[at];
                 at += 1;
                 h
             };
@@ -511,6 +579,36 @@ mod group_tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn trimmed_runs_get_their_spaces_back_from_the_markdown() {
+        let runs = vec![
+            InlineRun {
+                text: "Some".into(),
+                ..Default::default()
+            },
+            InlineRun {
+                text: "italic".into(),
+                italic: true,
+                ..Default::default()
+            },
+            InlineRun {
+                text: "bold".into(),
+                bold: true,
+                ..Default::default()
+            },
+            InlineRun {
+                text: "underline".into(),
+                underline: true,
+                ..Default::default()
+            },
+        ];
+        let merged = from_group("Some *italic* **bold** underline", &runs);
+        let text: String = merged.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(text, "Some italic bold underline");
+        assert_eq!(merged.len(), 7);
+        assert!(merged[1].text == " " && !merged[1].italic);
     }
 
     #[test]

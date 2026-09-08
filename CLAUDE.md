@@ -42,8 +42,10 @@ tests draw on.
     cargo fmt --check
     cargo run -p waddle -- FILE --to odt
 
-The build directory is the shared one in `~/.cargo/config.toml`, not
-`target/`. `cargo update -p docling-core` followed by the build is what
+`WADDLE_DUMP=dir` keeps every package a test writes, named by the test, for
+opening in Writer by hand. `WADDLE_CORPUS_WRITER=1` opens every corpus
+package in headless Writer, a second per document. The build directory is
+the shared one in `~/.cargo/config.toml`, not `target/`. `cargo update -p docling-core` followed by the build is what
 `docling-latest` in CI does; run it when docling.rs has released.
 
 ---

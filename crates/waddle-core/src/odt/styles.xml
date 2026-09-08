@@ -50,6 +50,18 @@
       <style:paragraph-properties fo:margin-top="0.106cm" fo:margin-bottom="0.106cm"/>
       <style:text-properties fo:font-size="85%" fo:font-weight="bold" fo:font-style="italic"/>
     </style:style>
+    <style:style style:name="List_20_Paragraph" style:display-name="List Paragraph" style:family="paragraph" style:parent-style-name="Standard" style:class="list">
+      <style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0.106cm" fo:line-height="115%"/>
+    </style:style>
+    <style:style style:name="Table_20_Contents" style:display-name="Table Contents" style:family="paragraph" style:parent-style-name="Standard" style:class="extra">
+      <style:paragraph-properties text:number-lines="false" text:line-number="0"/>
+    </style:style>
+    <!-- Bold on the paragraph style, not on a span: the reader resolves spans
+         and would return a header cell's text as **bold**. -->
+    <style:style style:name="Table_20_Heading" style:display-name="Table Heading" style:family="paragraph" style:parent-style-name="Table_20_Contents" style:class="extra">
+      <style:paragraph-properties fo:text-align="center"/>
+      <style:text-properties fo:font-weight="bold"/>
+    </style:style>
     <style:style style:name="Preformatted_20_Text" style:display-name="Preformatted Text" style:family="paragraph" style:parent-style-name="Standard" style:class="html">
       <style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0cm"/>
       <style:text-properties style:font-name="Liberation Mono" fo:font-size="10pt"/>

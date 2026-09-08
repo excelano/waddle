@@ -253,3 +253,204 @@ fn wrappers_are_transparent_and_layers_are_dropped() {
     assert_eq!(out.warnings.len(), 1);
     assert_eq!(out.warnings[0].node, "furniture");
 }
+
+fn list_item(ordered: bool, number: u64, first: bool, level: u8, text: &str) -> Node {
+    Node::ListItem {
+        ordered,
+        number,
+        first_in_list: first,
+        text: text.into(),
+        level,
+        marker: None,
+        location: None,
+        dclx: None,
+        href: None,
+        layer: None,
+    }
+}
+
+#[test]
+fn lists_come_back_nested_numbered_and_started() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(list_item(true, 3, true, 0, "three **bold**"));
+    doc.push(list_item(true, 4, false, 0, "four"));
+    doc.push(list_item(false, 0, false, 1, "a bullet under four"));
+    doc.push(list_item(false, 0, false, 1, "another"));
+    doc.push(list_item(true, 5, false, 0, "five"));
+    doc.push(list_item(false, 0, true, 0, "a new bullet list"));
+    let (back, out) = odt_trip(&doc);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    type Shape<'a> = (bool, u64, bool, u8, &'a str, Option<&'a str>);
+    let shape: Vec<Shape> = back
+        .nodes
+        .iter()
+        .map(|n| match n {
+            Node::ListItem {
+                ordered,
+                number,
+                first_in_list,
+                level,
+                text,
+                marker,
+                ..
+            } => (
+                *ordered,
+                *number,
+                *first_in_list,
+                *level,
+                text.as_str(),
+                marker.as_deref(),
+            ),
+            other => panic!("not a list item: {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        vec![
+            // Two spaces: the reader joins a list item's runs with a space
+            // beside the one that is there (DESIGN.md §6).
+            (true, 3, true, 0, "three  **bold**", Some("3.")),
+            (true, 4, false, 0, "four", Some("4.")),
+            (false, 0, true, 1, "a bullet under four", None),
+            (false, 0, false, 1, "another", None),
+            (true, 5, false, 0, "five", Some("5.")),
+            (false, 0, true, 0, "a new bullet list", None),
+        ]
+    );
+    assert_fixed_point(&back);
+}
+
+#[test]
+fn a_table_keeps_its_grid_spans_and_caption_text() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Table(docling_core::Table {
+        rows: vec![
+            vec!["Name".into(), "Q1".into(), "Q2".into()],
+            vec!["Total".into(), "both".into(), "both".into()],
+            vec!["Tall".into(), "1".into(), "2".into()],
+            vec!["Tall".into(), "3".into(), "4".into()],
+        ],
+        location: None,
+        structure: Some(docling_core::TableStructure {
+            header_row: vec![true, false, false, false],
+            col_continuation: vec![
+                vec![false; 3],
+                vec![false, false, true],
+                vec![false; 3],
+                vec![false; 3],
+            ],
+            row_continuation: vec![
+                vec![false; 3],
+                vec![false; 3],
+                vec![false; 3],
+                vec![true, false, false],
+            ],
+            row_header: Vec::new(),
+            col_header: Vec::new(),
+        }),
+        cell_blocks: None,
+        caption: Some("Table 1: quarters".into()),
+        cells: None,
+    }));
+    let (back, out) = odt_trip(&doc);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(
+        back.nodes[0],
+        Node::Paragraph {
+            text: "Table 1: quarters".into()
+        },
+        "the caption reads back as a paragraph before the table (DESIGN.md §6)"
+    );
+    let Node::Table(table) = &back.nodes[1] else {
+        panic!("{:?}", back.nodes[1]);
+    };
+    assert_eq!(table.rows, doc_table(&doc).rows);
+    let structure = table.structure.as_ref().expect("structure");
+    assert_eq!(structure.col_continuation[1], vec![false, false, true]);
+    assert_eq!(structure.row_continuation[3], vec![true, false, false]);
+    assert_eq!(structure.header_row, vec![true, false, false, false]);
+    assert_fixed_point(&back);
+}
+
+fn doc_table(doc: &DoclingDocument) -> &docling_core::Table {
+    match &doc.nodes[0] {
+        Node::Table(t) => t,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn pictures_with_and_without_bytes_come_back_as_pictures() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Picture {
+        caption: Some("Figure 1: a grey box".into()),
+        caption_href: None,
+        image: None,
+        classification: None,
+    });
+    // The placeholder the writer embeds is a valid PNG; take it from the
+    // writer's own output to serve as real bytes for the second picture.
+    let png = {
+        let out = odt::write(&doc).unwrap();
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(out.bytes)).unwrap();
+        let mut file = archive.by_name("Pictures/image1.png").unwrap();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut bytes).unwrap();
+        bytes
+    };
+    doc.push(Node::Picture {
+        caption: None,
+        caption_href: None,
+        image: Some(docling_core::PictureImage {
+            mimetype: "image/png".into(),
+            width: 16,
+            height: 12,
+            data: png,
+        }),
+        classification: None,
+    });
+    doc.add_paragraph("after");
+    let (back, out) = odt_trip(&doc);
+    assert_eq!(out.warnings.len(), 1, "{:?}", out.warnings);
+    assert_eq!(
+        out.warnings[0].to_string(),
+        "picture: written as a placeholder"
+    );
+    let kinds: Vec<&str> = back.nodes.iter().map(waddle_core::node::kind).collect();
+    assert_eq!(kinds, vec!["paragraph", "picture", "picture", "paragraph"]);
+    assert_fixed_point(&back);
+}
+
+#[test]
+fn code_checkbox_and_page_break_degrade_as_documented() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Code {
+        language: None,
+        text: "fn main() {\n    println!(\"hi\");\n}".into(),
+        orig: None,
+        pretty: None,
+    });
+    doc.push(Node::CheckboxItem {
+        checked: true,
+        text: "done".into(),
+    });
+    doc.push(Node::PageBreak);
+    doc.add_paragraph("next page");
+    let (back, out) = odt_trip(&doc);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(
+        back.nodes,
+        vec![
+            Node::Paragraph {
+                text: "fn main() {\n    println!(\"hi\");\n}".into()
+            },
+            Node::Paragraph {
+                text: "☑ done".into()
+            },
+            Node::Paragraph {
+                text: "next page".into()
+            },
+        ]
+    );
+    assert_fixed_point(&back);
+}

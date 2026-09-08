@@ -4,10 +4,10 @@ The reasoning behind the crate, in the order the decisions were made, each
 dated. `CLAUDE.md`, once there is code, is the short guide; this is the long
 one. `git log` is the record of how each section came to say what it says.
 
-Status: pre-code. Every claim about docling.rs below was checked on
-2026-09-08 against the clone at `~/clones/docling.rs` at v1.37.4, which is
-byte-identical to the published `docling` and `docling-core` crates of that
-version. File references are to that tree.
+Every claim about docling.rs below was checked on 2026-09-08 against the
+clone at `~/clones/docling.rs` at v1.37.4, which is byte-identical to the
+published `docling` and `docling-core` crates of that version. File
+references are to that tree.
 
 ## 1. What this repository is
 
@@ -201,14 +201,22 @@ non-space and closes after it, so that `2 * 3 ** 4` stays arithmetic.
 
 A node that carries structured runs also carries the Markdown docling built
 from them, and each side knows something the other does not. The runs have
-the exact text and the underline and script that have no marker; the
-Markdown has the hyperlinks, since `InlineRun` has no field for one, and
-its spacing is docling's, with a space inserted at every run boundary. The
-first merge took the text from the Markdown and was caught by the
-fixed-point test: each trip through the reader added spaces. The rule now
-is that the runs are the text and only the link targets are copied onto
-them, aligned character by character with whitespace set aside. A space
-between two runs is linked only when both sides are.
+the exact characters and the underline and script that have no marker; the
+Markdown has the hyperlinks, since `InlineRun` has no field for one. Whose
+spacing to trust depends on the reader, and the corpus settled it on
+2026-09-08: the ODF reader keeps a paragraph's spaces in its runs, while
+the DOCX and HTML readers trim every run and join them with single spaces
+in the Markdown, so that "the runs are the text" glued a Word document's
+words together. The Markdown's own spacing is docling's, with a space at
+every run boundary whether or not one was there. So the runs are the text,
+link targets are copied onto them aligned character by character with
+whitespace set aside, and only for a paragraph whose runs carry no edge
+whitespace at all is a single space put between two runs where the
+Markdown has one. A space between two runs is linked only when both sides
+are. The first merge took the text from the Markdown and was caught by the
+fixed-point test: each trip through the reader added spaces. Brackets
+inside a link's anchor balance, as CommonMark has them, because Wikipedia
+writes its citation marks as `[[ 1 ]](#note)`.
 
 **2026-09-08, Segler's DOM is the second front end, later, if ever.**
 `segler-core` is the fleet's lossless DocLang reader and would return
@@ -235,16 +243,16 @@ level 1 would read back one level deeper than it went in.
 | Heading level 1 | `text:p` with the `Title` paragraph style |
 | Heading level N > 1 | `text:h text:outline-level="N-1"` with `Heading_20_N-1` |
 | Paragraph, InlineGroup | `text:p`; runs as `text:span` on automatic text styles; `text:a xlink:href` for links; `text:line-break`, `text:tab`, `text:s` for whitespace |
-| ListItem | nested `text:list` / `text:list-item`, rebuilt from the flat level sequence; ordered or bullet chosen by the list style's `text:list-level-style-number` or `-bullet`; `text:start-value` when the number restarts; a list closes at the first non-list node |
+| ListItem | nested `text:list` / `text:list-item`, rebuilt from the flat level sequence, every element naming a generated `text:list-style` whose levels say numbered or bullet and where numbering starts, since the reader reads the kind from the element's own style and the start from the level; a new element opens where the model says a list begins or the kind changes; a level deeper than one below its parent nests one deeper, which is where the reader would put it; numbered levels show the enclosing numbers (`1.1.`) in Writer through `text:display-levels`, which the reader does not read |
 | CheckboxItem | `text:p` prefixed `☐ ` or `☑ `; ODF text has no checkbox and the reader detects none |
-| Code | one `text:p` per line in the `Preformatted_20_Text` style on a monospace font; the reader has no code detection, see §6 |
-| Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; `office:value-type="string"` on every cell |
-| Picture | `draw:frame` anchored as paragraph with `draw:image xlink:href="Pictures/…"` and the bytes in the package, or an empty frame with `svg:desc` when the node carries no bytes; caption as a following `text:p` in the `Caption` style |
-| Chart | its table, then the caption |
+| Code | one `text:p` in the `Preformatted_20_Text` style, lines as `text:line-break`, so the block returns as one paragraph with its newlines rather than one paragraph per line; the `pretty` form when the pipeline made one; the reader has no code detection, see §6 |
+| Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the leading rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; a cell with rich blocks holds them as body nodes; a plain cell is `office:value-type="string"`, which the reader reads flat, and a cell with any span or link is left untyped, which the reader reads as rich and so keeps its runs and links; header cells in the `Table_20_Heading` paragraph style, bold on the style rather than a span so it does not return as `**bold**` |
+| Picture | the caption first, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized from the pixels at 96 dpi and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
+| Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; MathML is a later release |
 | FieldRegion | a two-column table of key and value |
 | TextDump | paragraphs split on blank lines |
-| PageBreak | an empty `text:p` in an automatic style with `fo:break-before="page"` |
+| PageBreak | an empty `text:p` in an automatic style with `fo:break-before="page"`; the reader drops an empty paragraph, so a break does not return |
 | Group | transparent, unless its layer is furniture, notes or invisible, in which case it and its children are dropped |
 | Located, Commented, DoclangOnly | the inner node |
 | Furniture, PageFurniture, CommentSection, PageInfo | dropped |
@@ -264,11 +272,12 @@ level 1 would read back one level deeper than it went in.
 | Chart, Formula, FieldRegion, TextDump, Group and the wrappers | as for ODT |
 | PageBreak | `w:br w:type="page"` |
 
-Both packages carry a stock style sheet written by waddle: the heading
-family, Title, Subtitle, Caption, the code style, one bullet and one
-numbered list definition, a plain table style, and a body font. Nothing is
-inherited from any template in the first release; §9 has the template
-option.
+Captions go before their table or picture, which is where docling's
+Markdown puts them. Both packages carry a stock style sheet written by
+waddle: the heading family, Title, Subtitle, Caption, the code, list and
+table paragraph styles, and a body font; list styles are generated per
+document because their levels depend on it. Nothing is inherited from any
+template in the first release; §9 has the template option.
 
 ## 6. Round trip, and what cannot round-trip
 
@@ -288,6 +297,22 @@ document, and it caught the first one. When LibreOffice is installed the
 harness also opens every package in headless Writer and converts it to
 PDF, the cheapest proof that it loads without a repair prompt; CI installs
 Writer for that job, and a machine without it skips the check and says so.
+
+**2026-09-08, the corpus test checks properties, not golden files.** The
+concept planned golden files regenerated on demand. Every document in
+docling.rs's own corpus for the Markdown, DOCX, ODF, HTML, PPTX and XLSX
+formats is read by docling, written, read back, and checked for three
+properties chosen to survive the diffs above: every piece of body text in
+the source is in the result, comparing letters and digits only; tables and
+pictures are as many as they were; and a second trip is a fixed point.
+Golden files would have carried docling's reader output, which changes
+several times a week for reasons that are not this crate's, and every
+change would have been noise here. The properties hold across all of the
+corpus; a document that fails one names itself, and the corpus found the
+glued words, the bracketed citation marks and the chart without data on
+its first run. The corpus is a clone on David's machine and the test skips
+without it. `WADDLE_CORPUS_WRITER=1` opens every corpus package in Writer
+as well, a second per document.
 
 Some diffs are inherent because the reader does not look, and the test
 suite lists them by name rather than tolerating diffs in general. Read on
@@ -314,6 +339,19 @@ The ODF reader resolves a link's character style like any span's, so the
 stock `Internet link` style carries colour and no underline; an underline
 there would read back as an underlined run. Inline code is a monospace
 span that the reader has no field for, so it returns as plain text.
+
+Headings and list items return as flat Markdown with no runs, so underline,
+sub and superscript in them are lost, and a multilevel marker such as
+`1.1.` returns as `1.` because the reader composes the marker from the
+level's prefix and suffix. The reader also joins a flat text's runs with a
+space beside any that is there, so `three **bold**` returns as
+`three  **bold**`; the writer collapses runs of spaces in headings and list
+items before writing, which makes the second trip equal the first. Where a
+run without a marker sits in such a text, the second trip merges it into
+its neighbour and the space count around it changes; the corpus test
+compares with whitespace made uniform for that reason and no other.
+
+A page break is an empty paragraph, which the reader drops.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return. Reviewer comments are in that set for the first
