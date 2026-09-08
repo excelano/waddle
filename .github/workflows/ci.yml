@@ -12,6 +12,10 @@ name: ci
 # the pin admits, on every push and once a week regardless, so the failure is
 # seen the day the release lands rather than the day a downstream bumps its
 # pin. DESIGN.md §3.
+#
+# The third installs LibreOffice and runs the round-trip tests, which open
+# every package they write in headless Writer when `soffice` is on the path
+# and skip that check when it is not. DESIGN.md §6.
 on:
   push:
     branches: [main]
@@ -48,3 +52,22 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace
+
+  writer:
+    name: Opens in Writer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install LibreOffice Writer
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer
+
+      - name: Round trip, opened in Writer
+        run: cargo test -p waddle-core --test roundtrip -- --nocapture 2>&1 | tee writer.log && ! grep -q "soffice not installed" writer.log

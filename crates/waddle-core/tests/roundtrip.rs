@@ -7,8 +7,15 @@
 //! runs come back with their text and formatting. And a second trip is a
 //! fixed point: what the reader produced, written and read again, is equal.
 //!
+//! When LibreOffice is installed, every package is also opened by `soffice`
+//! and converted to PDF, which is the cheapest proof that a package loads
+//! without a repair prompt. Without it that check is skipped and says so.
+//!
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
+
+use std::path::Path;
+use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{DoclingDocument, InlineRun, Node, Script, inline_paragraph_node};
@@ -26,18 +33,51 @@ fn read_back(bytes: Vec<u8>) -> DoclingDocument {
 /// there, named by the test, so it can be opened in Writer by hand.
 fn odt_trip(doc: &DoclingDocument) -> (DoclingDocument, Output) {
     let out = odt::write(doc).expect("odt writes");
+    let name = std::thread::current()
+        .name()
+        .unwrap_or("test")
+        .replace("::", "_");
     if let Some(dir) = std::env::var_os("WADDLE_DUMP") {
-        let name = std::thread::current()
-            .name()
-            .unwrap_or("test")
-            .replace("::", "_");
-        std::fs::write(
-            std::path::Path::new(&dir).join(format!("{name}.odt")),
-            &out.bytes,
-        )
-        .expect("dump directory is writable");
+        std::fs::write(Path::new(&dir).join(format!("{name}.odt")), &out.bytes)
+            .expect("dump directory is writable");
     }
+    assert_opens_in_writer(&name, &out.bytes);
     (read_back(out.bytes.clone()), out)
+}
+
+/// Convert the package to PDF with headless LibreOffice, each call in its
+/// own profile directory so parallel tests do not share one instance.
+fn assert_opens_in_writer(name: &str, bytes: &[u8]) {
+    if Command::new("soffice").arg("--version").output().is_err() {
+        eprintln!("soffice not installed; skipping the Writer check for {name}");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("waddle-writer-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let odt = dir.join(format!("{name}.odt"));
+    std::fs::write(&odt, bytes).expect("temp odt");
+    let result = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!(
+            "-env:UserInstallation=file://{}",
+            dir.join("profile").display()
+        ))
+        .arg("--convert-to")
+        .arg("pdf")
+        .arg("--outdir")
+        .arg(&dir)
+        .arg(&odt)
+        .output()
+        .expect("soffice runs");
+    let pdf = dir.join(format!("{name}.pdf"));
+    assert!(
+        result.status.success() && pdf.is_file(),
+        "Writer did not convert {name}: {}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn squeezed(s: &str) -> String {

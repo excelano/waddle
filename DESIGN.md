@@ -284,7 +284,10 @@ structured runs come back with their text and formatting, which is where
 underline and superscript are checked. And a second trip is a fixed point:
 what the reader produced, written and read again, is equal node for node.
 The fixed point is the test that catches a writer quietly changing a
-document, and it caught the first one.
+document, and it caught the first one. When LibreOffice is installed the
+harness also opens every package in headless Writer and converts it to
+PDF, the cheapest proof that it loads without a repair prompt; CI installs
+Writer for that job, and a machine without it skips the check and says so.
 
 Some diffs are inherent because the reader does not look, and the test
 suite lists them by name rather than tolerating diffs in general. Read on
