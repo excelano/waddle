@@ -19,6 +19,13 @@ waddle-core = { path = "crates/waddle-core", version = "0.1.0" }
 # exhaustive.
 docling-core = "1.37"
 clap = { version = "4.6", features = ["derive"] }
+# Package assembly. Defaults pull zstd, xz and bzip2; an office package only
+# ever stores or deflates, and the zlib-rs backend is pure Rust.
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# docling.rs's readers, for the binary's input and for the library's
+# round-trip tests. Without default features it is the pure-Rust declarative
+# converters and nothing that compiles C.
+docling = { version = "1.37", default-features = false }
 
 # The profile that 'dist' will build with
 [profile.dist]

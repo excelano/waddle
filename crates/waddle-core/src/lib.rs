@@ -15,10 +15,16 @@
 
 #![forbid(unsafe_code)]
 
+mod error;
+mod inline;
 pub mod node;
+pub mod odt;
+mod package;
 pub mod report;
 pub mod target;
+mod xml;
 
 pub use docling_core::{DoclingDocument, Node};
+pub use error::Error;
 pub use report::{Output, Reason, Warning};
 pub use target::Target;

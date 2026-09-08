@@ -13,6 +13,11 @@ rust-version.workspace = true
 
 [dependencies]
 docling-core.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+# The round trip: write a package, read it back with docling.rs's own reader.
+docling.workspace = true
 
 [package.metadata.dist]
 dist = false

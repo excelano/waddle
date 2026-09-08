@@ -123,11 +123,17 @@ That satisfies `~/notes/pure_rust_preference.md` without an exception, and
 `waddle-core` must keep it that way: a change that adds a C dependency is a
 decision to take with David, not a cargo add.
 
-`quick-xml` writes the XML and `zip` assembles the package; both are in
-docling.rs's own tree at the versions waddle would pin, both proven on
-wasm32 there. ODF requires the `mimetype` entry first and stored
-uncompressed, which `zip` supports per entry. `pulldown-cmark` reads the
-inline Markdown in paragraph strings; §4 says why that is needed.
+`zip` assembles the package, without its default features, which pull
+zstd, xz and bzip2, and with the zlib-rs deflate backend, which is Rust.
+ODF requires the `mimetype` entry first and stored uncompressed, which
+`zip` supports per entry.
+
+**2026-09-08, the XML is pushed as strings.** The concept named `quick-xml`
+for the writer. docling-core's own serialisers build their output as
+strings, the vocabulary of each package is fixed and small, and what an XML
+writer library would add over that is an escape function, which is ten
+lines in `xml.rs`. The static parts, `styles.xml` and the manifest, are
+files included at compile time and edited as XML.
 
 **2026-09-08, keeping up with docling.rs.** Measured on the clone: seventy
 tags in the thirty days to 2026-09-08, and `document.rs` changed seventeen
@@ -182,18 +188,27 @@ wrapped in `Node::InlineGroup { runs, md_text }`; a paragraph with a single
 plain run collapses to `Node::Paragraph`. The Markdown and PPTX readers
 construct none.
 
-**2026-09-08, runs when present, otherwise the Markdown.** The writer uses
-the structured runs where a node carries them, which is the path Duckling's
-documents take from DOCX, ODT and HTML sources and where underline and
-sub or superscript survive. Otherwise it parses the paragraph string's
-inline Markdown with `pulldown-cmark`, inline scope only, which yields
-bold, italic, strike, code and links in one pass. docling-core's own
-`inline_runs_from_markdown` was the alternative; it is what docling's DocLang
-export uses on the same strings and would match that reading, but it
-returns runs without hrefs, so links would need a second parser of our own.
-One parser that reads the text the way a Markdown renderer would is the
-simpler choice. If the two readings diverge on a real document, that is the
-decision to revisit.
+**2026-09-08, a scanner of docling's dialect, and the runs are the text.**
+The concept's first answer was `pulldown-cmark`. Building the writer showed
+why not: a paragraph string is inline by definition, and a Markdown parser
+reads block structure, raw HTML and entities into it. docling-core's own
+`inline_runs_from_markdown` was the other candidate; it keeps no link
+target and trims every run. So `inline.rs` is a scanner of the dialect
+docling emits and nothing more: `***`, `**`, `*`, `~~`, backticks,
+`[text](url)`, backslash escapes and the HTML entities docling writes for
+`&`, `<` and `>`, with CommonMark's rule that a marker opens against
+non-space and closes after it, so that `2 * 3 ** 4` stays arithmetic.
+
+A node that carries structured runs also carries the Markdown docling built
+from them, and each side knows something the other does not. The runs have
+the exact text and the underline and script that have no marker; the
+Markdown has the hyperlinks, since `InlineRun` has no field for one, and
+its spacing is docling's, with a space inserted at every run boundary. The
+first merge took the text from the Markdown and was caught by the
+fixed-point test: each trip through the reader added spaces. The rule now
+is that the runs are the text and only the link targets are copied onto
+them, aligned character by character with whitespace set aside. A space
+between two runs is linked only when both sides are.
 
 **2026-09-08, Segler's DOM is the second front end, later, if ever.**
 `segler-core` is the fleet's lossless DocLang reader and would return
@@ -261,9 +276,15 @@ The conformance test is a round trip through docling.rs's readers: build a
 `DoclingDocument`, write the package, read it back with
 `DocumentConverter` as `InputFormat::Odt` or `InputFormat::Docx`, and
 compare. docling.rs's own `dclx_roundtrip.rs` compares the two Markdown
-exports; waddle compares the DocLang exports as well, because the office
-readers do construct runs and Markdown cannot show underline or
-superscript. Markdown equality is the floor, DocLang equality the target.
+exports. waddle's harness makes three comparisons, weakest to strongest,
+settled on 2026-09-08 when the first trip ran. The Markdown exports agree
+once whitespace is set aside, and no closer, because the ODF reader rebuilds
+a paragraph's Markdown from its runs with docling's own spacing. The
+structured runs come back with their text and formatting, which is where
+underline and superscript are checked. And a second trip is a fixed point:
+what the reader produced, written and read again, is equal node for node.
+The fixed point is the test that catches a writer quietly changing a
+document, and it caught the first one.
 
 Some diffs are inherent because the reader does not look, and the test
 suite lists them by name rather than tolerating diffs in general. Read on
@@ -285,6 +306,11 @@ paragraph beginning with a box character. The DOCX reader recovers both.
 Underline, subscript and superscript survive the DOCX and ODF readers as
 runs and are lost by the DocLang reader, so they hold through an
 office round trip and not through a DocLang one.
+
+The ODF reader resolves a link's character style like any span's, so the
+stock `Internet link` style carries colour and no underline; an underline
+there would read back as an underlined run. Inline code is a monospace
+span that the reader has no field for, so it returns as plain text.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return. Reviewer comments are in that set for the first
