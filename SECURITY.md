@@ -12,7 +12,7 @@ The latest 0.x release receives security fixes. Older versions are not supported
 
 ## What waddle can access
 
-waddle is a CLI that runs locally on your machine. It reads the DocLang, DocLang archive or docling JSON file you point it at (or standard input), plus the picture assets that file references beside it, and writes one new office package beside the input or at the path you give with `-o`. It never overwrites: a name that is taken gets a numbered one. `--dry-run` writes nothing. waddle makes no network calls of any kind, has no auth layer, and implements no administrative operations. It can only read and write files your operating-system user already has access to.
+waddle is a CLI that runs locally on your machine. It reads the DocLang, DocLang archive or docling JSON file you point it at (or standard input), plus the picture assets that file references beside it, refusing any asset path that leaves the input's own directory, and writes one new office package beside the input or at the path you give with `-o`. It never overwrites: a name that is taken gets a numbered one. `--dry-run` writes nothing. waddle makes no network calls of any kind, has no auth layer, and implements no administrative operations. It can only read and write files your operating-system user already has access to.
 
 The `waddle-core` library reads and writes nothing; it takes a document in memory and returns bytes.
 

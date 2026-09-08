@@ -1281,7 +1281,13 @@ name = "waddle"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "docling",
+ "docling-core",
+ "image",
+ "roxmltree",
+ "serde_json",
  "waddle-core",
+ "zip 8.6.0",
 ]
 
 [[package]]

@@ -11,8 +11,9 @@ out/report.docx
 
 $ waddle report.dclg --to odt --dry-run
 would write report.odt
+waddle: 3 nodes would be dropped or degraded:
+  furniture: dropped, on the furniture layer (2)
   picture: written as a placeholder
-  paragraph: dropped, on the furniture layer
 ```
 
 ## Why

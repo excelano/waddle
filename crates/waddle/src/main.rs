@@ -12,12 +12,17 @@
 
 #![deny(unsafe_code)]
 
+mod assets;
+mod input;
+mod output;
+
+use std::collections::BTreeMap;
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, ValueEnum};
-use waddle_core::Target;
+use waddle_core::{Target, odt};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -79,36 +84,124 @@ impl ColorMode {
 
 /// The failure exit codes; success is `ExitCode::SUCCESS`.
 enum Failure {
-    /// The command was well-formed and the input was not.
+    /// The command was well-formed and the input was not: exit 1.
     Input(String),
+    /// The command line itself was wrong: exit 2.
+    Usage(String),
+}
+
+/// What a run has to say on stderr before it says whether it wrote.
+struct Report {
+    colored: bool,
+    /// Each distinct warning line with how often it occurred.
+    lines: BTreeMap<String, usize>,
+}
+
+impl Report {
+    fn add(&mut self, line: String) {
+        *self.lines.entry(line).or_insert(0) += 1;
+    }
+
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    fn print(&self, verb: &str) {
+        if self.lines.is_empty() {
+            return;
+        }
+        let total: usize = self.lines.values().sum();
+        let (yellow, reset) = if self.colored {
+            ("\x1b[33m", "\x1b[0m")
+        } else {
+            ("", "")
+        };
+        eprintln!(
+            "{yellow}waddle:{reset} {total} {} {verb}:",
+            if total == 1 { "node" } else { "nodes" }
+        );
+        for (line, count) in &self.lines {
+            if *count > 1 {
+                eprintln!("  {line} ({count})");
+            } else {
+                eprintln!("  {line}");
+            }
+        }
+    }
 }
 
 fn run(cli: &Cli) -> Result<(), Failure> {
     let from_stdin = cli.input.as_os_str() == "-";
-    if !from_stdin && !cli.input.is_file() {
+    let input = input::read(&cli.input).map_err(Failure::Input)?;
+    let mut doc = input::convert(&input).map_err(Failure::Input)?;
+    let mut report = Report {
+        colored: cli.color.enabled(),
+        lines: BTreeMap::new(),
+    };
+    for problem in assets::resolve(&mut doc, &input) {
+        report.add(problem);
+    }
+    let out = match cli.to {
+        Target::Odt => odt::write(&doc).map_err(|e| Failure::Input(e.to_string()))?,
+        Target::Docx => {
+            return Err(Failure::Input(
+                "writing docx is not implemented".to_string(),
+            ));
+        }
+    };
+    for warning in &out.warnings {
+        report.add(warning.to_string());
+    }
+    let input_path: Option<&Path> = (!from_stdin).then_some(cli.input.as_path());
+    let destination = output::destination(
+        input_path,
+        &input.name,
+        cli.output.as_deref(),
+        cli.to.extension(),
+    )
+    .map_err(Failure::Usage)?;
+    let destination = output::available(&destination);
+
+    if cli.strict && !report.is_empty() {
+        report.print("would be dropped or degraded");
         return Err(Failure::Input(format!(
-            "cannot read {}: no such file",
-            cli.input.display()
+            "not writing {}: --strict and the document cannot be carried whole",
+            destination.display()
         )));
     }
-    Err(Failure::Input(format!(
-        "writing {} is not implemented",
-        cli.to
-    )))
+    if cli.dry_run {
+        println!("would write {}", destination.display());
+        report.print("would be dropped or degraded");
+        return Ok(());
+    }
+    std::fs::write(&destination, &out.bytes).map_err(|e| {
+        Failure::Input(format!(
+            "cannot write {}: {}",
+            destination.display(),
+            input::reason(&e)
+        ))
+    })?;
+    println!("{}", destination.display());
+    report.print("dropped or degraded");
+    Ok(())
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    let (red, reset) = if cli.color.enabled() {
+        ("\x1b[31m", "\x1b[0m")
+    } else {
+        ("", "")
+    };
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(Failure::Input(message)) => {
-            let (red, reset) = if cli.color.enabled() {
-                ("\x1b[31m", "\x1b[0m")
-            } else {
-                ("", "")
-            };
             eprintln!("{red}waddle:{reset} {message}");
             ExitCode::from(1)
+        }
+        Err(Failure::Usage(message)) => {
+            eprintln!("{red}waddle:{reset} {message}");
+            ExitCode::from(2)
         }
     }
 }

@@ -169,15 +169,21 @@ through Duckling has the bytes because Duckling converted the original.
 
 **2026-09-08, the binary resolves picture assets itself.** After docling's
 reader has produced the document, the CLI reads the picture sources from
-the input in document order and pairs them with the `Picture` nodes by
-ordinal: a `data:` URI decodes in place, an `assets/` path resolves beside
-a bare `.dclg` or as an entry inside a `.dclx`, and a JSON input's
-`pictures[i].image.uri` is a data URI. Pairing by ordinal is the weak
-point, and it holds because the reader emits pictures in document order;
-the test suite pins that. This is a workaround for an upstream gap and the
-issue to raise is that `DoclangBackend` should read `<src>`; when it does,
-this code is deleted. None of this is the library's. It writes the
-bytes a `Picture` carries and a placeholder when it carries none.
+the input in document order and pairs them with the picture nodes by
+ordinal. For DocLang that is every `<picture>` element's `<src uri>`, for
+JSON it is the body walked through its references with groups entered and
+furniture skipped, which is the walk the JSON reader makes. A `data:` URI
+decodes in place, an `assets/` path resolves beside a bare `.dclg` or as an
+entry inside a `.dclx`, and a path that leaves the input's directory is
+refused, because the input names its assets and not the file system. The
+bytes are asked what they are: the image format and size come from the
+data, not from the name. Pairing by ordinal is the weak point, and it holds
+because the reader emits pictures in document order; when the two counts
+differ nothing is paired and the run says so, and every picture is a
+placeholder. This is a workaround for an upstream gap and the issue to
+raise is that `DoclangBackend` should read `<src>`; when it does, this code
+is deleted. None of this is the library's. It writes the bytes a `Picture`
+carries and a placeholder when it carries none.
 
 **Inline formatting arrives as Markdown markers.** The DocLang reader
 flattens `<bold>` to `**`, `<italic>` to `*`, `<strikethrough>` to `~~`,
@@ -387,14 +393,20 @@ The rule is undecided; §9.
     waddle input.dclg --to odt --dry-run    # lists what would be written and dropped
     waddle input.dclg --to odt --strict     # refuse rather than drop
 
-Input format is detected from content, which docling's converter already
-does. Output never overwrites: `report.odt` present means `report (1).odt`,
-the rule Duckling's library implements. Exit 0 on success, and a run that
-dropped nodes with warnings is a success, as is a dry run; exit 1 when the
-input cannot be read or, under `--strict`, cannot be represented; exit 2
-when the command line is wrong. `--color auto|always|never` with `NO_COLOR`
-honoured, diagnostics on stderr, nothing on stdout but the path written.
-The contract is the fleet's and `--help` states it.
+Input format is told from the first bytes, not the extension: a zip is the
+archive, a brace is JSON, an angle bracket is DocLang. Output never
+overwrites: `report.odt` present means `report (1).odt`, the rule
+Duckling's library implements. `-o` names a file, or an existing directory
+to write into; standard input has nowhere to write beside, so `-o` is
+required with `-` and its absence is a command-line error. Exit 0 on
+success, and a run that dropped nodes with warnings is a success, as is a
+dry run; exit 1 when the input cannot be read or, under `--strict`, cannot
+be represented; exit 2 when the command line is wrong. Warnings go to
+stderr as one line per distinct warning with a count, under a first line
+that says how many nodes and whether they were or would be dropped, so a
+document with forty placeholder pictures says so once. `--color
+auto|always|never` with `NO_COLOR` honoured, nothing on stdout but the path
+written. The contract is the fleet's and `--help` states it.
 
 ## 9. Open threads
 

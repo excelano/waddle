@@ -24,6 +24,9 @@ pub mod report;
 pub mod target;
 mod xml;
 
+/// The model crate, re-exported so a caller uses the version this crate
+/// was built against.
+pub use docling_core;
 pub use docling_core::{DoclingDocument, Node};
 pub use error::Error;
 pub use report::{Output, Reason, Warning};
