@@ -22,6 +22,8 @@ The route from a DoclingDocument back to Word today is Markdown and then Pandoc,
 
 That plainness is the design. The model carries no styles, page geometry, fonts or themes, so waddle does not try to reproduce how the source document looked; there is nothing to reproduce it from. What it does is put every node the model holds into the construct the format has for it, and say on stderr what it could not carry. `--strict` turns that into a refusal.
 
+The construct chosen for each node is the one docling.rs's own reader for that format recognises, so a package waddle writes reads back into the document it was written from, as far as the reader allows; the design document in the repository lists where it does not.
+
 ## Install
 
     curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/excelano/waddle/main/install.sh | sh

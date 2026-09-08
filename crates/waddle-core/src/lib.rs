@@ -15,8 +15,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod docx;
 mod error;
 mod inline;
+mod list;
+mod media;
 pub mod node;
 pub mod odt;
 mod package;

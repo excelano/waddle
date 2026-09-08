@@ -11,7 +11,11 @@
 
 use docling_core::{DoclingDocument, Node, PictureImage, Table};
 
-use crate::inline::{self, Position, Run};
+use crate::inline::{
+    self, Position, Run, collapse_spaces, is_blank, merge_adjacent, outside_links, plain,
+};
+use crate::list::Style as ListStyle;
+use crate::media::{self, PLACEHOLDER_PNG, PLACEHOLDER_SIZE_IN};
 use crate::node::kind;
 use crate::package::{self, Part};
 use crate::report::{Output, Reason, Warning};
@@ -36,23 +40,8 @@ const FIXED_AUTOMATIC_STYLES: &str = r#"<style:style style:name="Pbreak" style:f
 <style:style style:name="WaddleCell" style:family="table-cell"><style:table-cell-properties fo:padding="0.097cm" fo:border="0.5pt solid #000000"/></style:style>
 "#;
 
-/// A 16 by 12 light grey PNG, written where a picture arrives without
-/// bytes. A frame with no image part reads back as nothing, so the
-/// placeholder is a real picture, and the reader returns a picture node for
-/// it as it does for every package-internal image.
-const PLACEHOLDER_PNG: &[u8] = &[
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0c, 0x08, 0x02, 0x00, 0x00, 0x00, 0xe4, 0x85, 0xaa,
-    0xd6, 0x00, 0x00, 0x00, 0x13, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xb8, 0x40, 0x22, 0x60,
-    0x18, 0xd5, 0x30, 0xaa, 0x01, 0x3b, 0x00, 0x00, 0x99, 0xc3, 0xd4, 0x10, 0x65, 0x6a, 0xad, 0xca,
-    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-];
-
 /// ODF's highest outline level.
 const MAX_OUTLINE: u8 = 10;
-
-/// The text width inside the stock page, in inches.
-const TEXT_WIDTH_IN: f64 = 6.5;
 
 /// Write the document as an ODT package.
 pub fn write(doc: &DoclingDocument) -> Result<Output, Error> {
@@ -169,7 +158,7 @@ struct Picture {
 pub(super) struct Writer {
     body: String,
     spans: Vec<Span>,
-    lists: Vec<list::Style>,
+    lists: Vec<ListStyle>,
     pictures: Vec<Picture>,
     tables: usize,
     warnings: Vec<Warning>,
@@ -189,7 +178,7 @@ impl Writer {
             ));
         }
         for (i, style) in self.lists.iter().enumerate() {
-            out.push_str(&style.xml(&list::style_name(i)));
+            out.push_str(&list::style_xml(style, &list::style_name(i)));
         }
         out.push_str("</office:automatic-styles>\n<office:body>\n<office:text>\n");
         out.push_str(&self.body);
@@ -456,7 +445,7 @@ impl Writer {
         }
         let (media_type, bytes, width_in, height_in) = match image {
             Some(image) => {
-                let (w, h) = fit(image.width, image.height);
+                let (w, h) = media::fit(image.width, image.height);
                 (image.mimetype.as_str(), image.data.as_slice(), w, h)
             }
             None => {
@@ -464,11 +453,12 @@ impl Writer {
                     node: "picture",
                     reason: Reason::Placeholder,
                 });
-                ("image/png", PLACEHOLDER_PNG, 2.0, 1.5)
+                let (w, h) = PLACEHOLDER_SIZE_IN;
+                ("image/png", PLACEHOLDER_PNG, w, h)
             }
         };
         let index = self.pictures.len() + 1;
-        let name = format!("Pictures/image{index}.{}", extension(media_type));
+        let name = format!("Pictures/image{index}.{}", media::extension(media_type));
         self.pictures.push(Picture {
             name: name.clone(),
             media_type: media_type.to_string(),
@@ -484,7 +474,7 @@ impl Writer {
     /// The runs of one paragraph. Consecutive runs with the same link share
     /// one `text:a`.
     pub(super) fn runs(&mut self, runs: &[Run]) {
-        let runs = outside_links(runs);
+        let runs = merge_adjacent(outside_links(runs));
         let mut at_start = true;
         let mut open_href: Option<&str> = None;
         for run in &runs {
@@ -574,98 +564,6 @@ impl Writer {
                     .push_str(&format!("<text:s text:c=\"{}\"/>", count - 1));
             }
         }
-    }
-}
-
-/// Whitespace at either end of a linked run moved out of the link, as its
-/// own plain run. The reader trims a link at its edges, so a space kept
-/// inside would be lost on the way back and the second trip would differ.
-fn outside_links(runs: &[Run]) -> Vec<Run> {
-    let mut out = Vec::with_capacity(runs.len());
-    for run in runs {
-        if run.href.is_none() {
-            out.push(run.clone());
-            continue;
-        }
-        let trimmed = run.text.trim();
-        let lead = run.text.len() - run.text.trim_start().len();
-        let trail = run.text.len() - run.text.trim_end().len();
-        if lead > 0 {
-            out.push(plain(&run.text[..lead]));
-        }
-        if !trimmed.is_empty() {
-            out.push(Run {
-                text: trimmed.to_string(),
-                ..run.clone()
-            });
-        }
-        if trail > 0 && !trimmed.is_empty() {
-            out.push(plain(&run.text[run.text.len() - trail..]));
-        }
-    }
-    out
-}
-
-fn plain(text: &str) -> Run {
-    Run {
-        text: text.to_string(),
-        ..Run::default()
-    }
-}
-
-fn is_blank(runs: &[Run]) -> bool {
-    runs.iter().all(|r| r.text.trim().is_empty())
-}
-
-/// Runs of spaces become one space. The reader returns headings and list
-/// items as flat Markdown with a space at every run boundary, so a second
-/// trip would otherwise widen every gap.
-pub(super) fn collapse_spaces(runs: Vec<Run>) -> Vec<Run> {
-    runs.into_iter()
-        .map(|run| {
-            let mut text = String::with_capacity(run.text.len());
-            let mut last_space = false;
-            for c in run.text.chars() {
-                if c == ' ' {
-                    if !last_space {
-                        text.push(c);
-                    }
-                    last_space = true;
-                } else {
-                    text.push(c);
-                    last_space = false;
-                }
-            }
-            Run { text, ..run }
-        })
-        .collect()
-}
-
-/// A picture's size on the page: its pixel size at 96 dpi, scaled down to
-/// the text width when wider.
-fn fit(width_px: u32, height_px: u32) -> (f64, f64) {
-    if width_px == 0 || height_px == 0 {
-        return (2.0, 1.5);
-    }
-    let w = f64::from(width_px) / 96.0;
-    let h = f64::from(height_px) / 96.0;
-    if w > TEXT_WIDTH_IN {
-        (TEXT_WIDTH_IN, h * TEXT_WIDTH_IN / w)
-    } else {
-        (w, h)
-    }
-}
-
-fn extension(media_type: &str) -> &'static str {
-    match media_type {
-        "image/png" => "png",
-        "image/jpeg" => "jpg",
-        "image/gif" => "gif",
-        "image/bmp" => "bmp",
-        "image/tiff" => "tif",
-        "image/webp" => "webp",
-        "image/svg+xml" => "svg",
-        _ => "bin",
     }
 }
 

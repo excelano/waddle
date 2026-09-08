@@ -183,6 +183,20 @@ fn json_carries_its_pictures_as_data_uris() {
 }
 
 #[test]
+fn docx_is_the_other_target() {
+    let dir = scratch("docx");
+    let path = write_dclg(&dir);
+    let out = waddle(&[path.to_str().unwrap(), "--to", "docx"], None);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    let written = dir.join("ducks.docx");
+    let mut archive = zip::ZipArchive::new(Cursor::new(std::fs::read(&written).unwrap())).unwrap();
+    let mut file = archive.by_name("word/media/image1.png").unwrap();
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes, PNG);
+}
+
+#[test]
 fn nothing_is_overwritten() {
     let dir = scratch("overwrite");
     let path = write_dclg(&dir);

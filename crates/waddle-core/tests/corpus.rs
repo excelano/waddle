@@ -21,7 +21,7 @@ use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{DoclingDocument, Node};
-use waddle_core::odt;
+use waddle_core::{Target, docx, odt};
 
 const FORMATS: &[&str] = &["md", "docx", "odf", "html", "pptx", "xlsx"];
 
@@ -34,8 +34,21 @@ fn corpus() -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-fn read_back(name: &str, bytes: Vec<u8>) -> Result<DoclingDocument, String> {
-    let source = SourceDocument::from_bytes(name, InputFormat::Odt, bytes);
+fn write(target: Target, doc: &DoclingDocument) -> Result<Vec<u8>, String> {
+    match target {
+        Target::Odt => odt::write(doc),
+        Target::Docx => docx::write(doc),
+    }
+    .map(|out| out.bytes)
+    .map_err(|e| e.to_string())
+}
+
+fn read_back(target: Target, name: &str, bytes: Vec<u8>) -> Result<DoclingDocument, String> {
+    let format = match target {
+        Target::Odt => InputFormat::Odt,
+        Target::Docx => InputFormat::Docx,
+    };
+    let source = SourceDocument::from_bytes(name, format, bytes);
     DocumentConverter::new()
         .convert(source)
         .map(|r| r.document)
@@ -64,7 +77,8 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
             Node::Heading { text, .. }
             | Node::Paragraph { text }
             | Node::CheckboxItem { text, .. } => out.push(text.clone()),
-            Node::InlineGroup { runs, .. } => out.extend(runs.iter().map(|r| r.text.clone())),
+            // The Markdown has the runs' text and the links the runs lack.
+            Node::InlineGroup { md_text, .. } => out.push(md_text.clone()),
             // The DocLang-only form is what the writer takes when present.
             Node::ListItem {
                 text,
@@ -73,8 +87,23 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
                 ..
             } => out.push(dclx.as_ref().map_or(text.clone(), |d| d.text.clone())),
             Node::Code { text, .. } => out.push(text.clone()),
+            // A cell's blocks in place of its flat text, in the order a
+            // reader that nests rather than flattens would give them.
             Node::Table(table) | Node::Chart { table, .. } => {
-                out.extend(table.rows.iter().flatten().cloned());
+                for (r, row) in table.rows.iter().enumerate() {
+                    for (c, text) in row.iter().enumerate() {
+                        match table
+                            .cell_blocks
+                            .as_ref()
+                            .and_then(|b| b.get(r))
+                            .and_then(|row| row.get(c))
+                            .filter(|blocks| !blocks.is_empty())
+                        {
+                            Some(blocks) => body_text(blocks, out),
+                            None => out.push(text.clone()),
+                        }
+                    }
+                }
                 if let Some(caption) = &table.caption {
                     out.push(caption.clone());
                 }
@@ -95,7 +124,7 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
     }
 }
 
-fn count(nodes: &[Node], what: fn(&Node) -> bool) -> usize {
+fn count(nodes: &[Node], what: fn(Target, &Node) -> bool, target: Target) -> usize {
     nodes
         .iter()
         .map(|n| match n {
@@ -103,25 +132,31 @@ fn count(nodes: &[Node], what: fn(&Node) -> bool) -> usize {
                 layer: None,
                 children,
                 ..
-            } => count(children, what),
+            } => count(children, what, target),
             Node::Located { inner, .. }
             | Node::Commented { inner, .. }
-            | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), what),
-            n => usize::from(what(n)),
+            | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), what, target),
+            n => usize::from(what(target, n)),
         })
         .sum()
 }
 
 /// A chart with data is written as a table, one without as a picture.
-fn is_table(n: &Node) -> bool {
+/// The DOCX reader unwraps a one-cell table into its content by design
+/// (DESIGN.md §6), so one is not counted for that target.
+fn is_table(target: Target, n: &Node) -> bool {
+    let one_cell = |t: &docling_core::Table| {
+        target == Target::Docx && t.rows.len() == 1 && t.rows[0].len() == 1
+    };
     match n {
-        Node::Table(_) | Node::FieldRegion { .. } => true,
-        Node::Chart { table, .. } => !table.rows.is_empty(),
+        Node::Table(t) => !one_cell(t),
+        Node::FieldRegion { .. } => true,
+        Node::Chart { table, .. } => !table.rows.is_empty() && !one_cell(table),
         _ => false,
     }
 }
 
-fn is_picture(n: &Node) -> bool {
+fn is_picture(_: Target, n: &Node) -> bool {
     match n {
         Node::Picture { .. } => true,
         Node::Chart { table, .. } => table.rows.is_empty(),
@@ -151,11 +186,11 @@ fn shape(node: &Node) -> String {
     out
 }
 
-fn opens_in_writer(name: &str, bytes: &[u8]) -> Result<(), String> {
+fn opens_in_writer(target: Target, name: &str, bytes: &[u8]) -> Result<(), String> {
     let dir = std::env::temp_dir().join(format!("waddle-corpus-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let odt = dir.join(format!("{name}.odt"));
+    let odt = dir.join(format!("{name}.{target}"));
     std::fs::write(&odt, bytes).map_err(|e| e.to_string())?;
     let result = Command::new("soffice")
         .arg("--headless")
@@ -180,7 +215,7 @@ fn opens_in_writer(name: &str, bytes: &[u8]) -> Result<(), String> {
     }
 }
 
-fn check(path: &std::path::Path) -> Result<(), String> {
+fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     let name = path.file_name().unwrap().to_string_lossy().to_string();
     let source = SourceDocument::from_file(path).map_err(|e| format!("docling: {e}"))?;
     let doc = match DocumentConverter::new().convert(source) {
@@ -190,18 +225,20 @@ fn check(path: &std::path::Path) -> Result<(), String> {
             return Ok(());
         }
     };
-    let out = odt::write(&doc).map_err(|e| e.to_string())?;
+    let bytes = write(target, &doc)?;
     if let Some(dir) = std::env::var_os("WADDLE_DUMP") {
-        std::fs::write(PathBuf::from(dir).join(format!("{name}.odt")), &out.bytes).unwrap();
+        std::fs::write(PathBuf::from(dir).join(format!("{name}.{target}")), &bytes).unwrap();
     }
     if std::env::var_os("WADDLE_CORPUS_WRITER").is_some() {
-        opens_in_writer(&name, &out.bytes)?;
+        opens_in_writer(target, &name, &bytes)?;
     }
-    let back = read_back(&name, out.bytes)?;
+    let back = read_back(target, &name, bytes)?;
 
     let mut pieces = Vec::new();
     body_text(&doc.nodes, &mut pieces);
-    let haystack = words(&back.export_to_markdown());
+    let mut back_pieces = Vec::new();
+    body_text(&back.nodes, &mut back_pieces);
+    let haystack = words(&back_pieces.join(" "));
     let missing: Vec<&String> = pieces
         .iter()
         .filter(|p| {
@@ -222,18 +259,21 @@ fn check(path: &std::path::Path) -> Result<(), String> {
                 .collect::<Vec<_>>()
         ));
     }
-    let (tables, tables_back) = (count(&doc.nodes, is_table), count(&back.nodes, is_table));
+    let (tables, tables_back) = (
+        count(&doc.nodes, is_table, target),
+        count(&back.nodes, is_table, target),
+    );
     if tables != tables_back {
         problems.push(format!("{tables} tables in, {tables_back} out"));
     }
     let (pictures, pictures_back) = (
-        count(&doc.nodes, is_picture),
-        count(&back.nodes, is_picture),
+        count(&doc.nodes, is_picture, target),
+        count(&back.nodes, is_picture, target),
     );
     if pictures != pictures_back {
         problems.push(format!("{pictures} pictures in, {pictures_back} out"));
     }
-    let again = read_back(&name, odt::write(&back).map_err(|e| e.to_string())?.bytes)?;
+    let again = read_back(target, &name, write(target, &back)?)?;
     let same = again.nodes.len() == back.nodes.len()
         && again
             .nodes
@@ -284,18 +324,17 @@ fn corpus_round_trips() {
             .collect();
         paths.sort();
         for path in paths {
-            checked += 1;
-            if let Err(problem) = check(&path) {
-                failures.push(format!(
-                    "{format}/{}: {problem}",
-                    path.file_name().unwrap().to_string_lossy()
-                ));
+            for target in [Target::Odt, Target::Docx] {
+                checked += 1;
+                if let Err(problem) = check(target, &path) {
+                    failures.push(format!(
+                        "{format}/{} to {target}: {problem}",
+                        path.file_name().unwrap().to_string_lossy()
+                    ));
+                }
             }
         }
     }
-    eprintln!(
-        "{checked} corpus documents round-tripped, {} with problems",
-        failures.len()
-    );
+    eprintln!("{checked} corpus trips, {} with problems", failures.len());
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }

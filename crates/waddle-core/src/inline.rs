@@ -52,6 +52,87 @@ impl Run {
     }
 }
 
+/// One plain run.
+pub fn plain(text: &str) -> Run {
+    Run {
+        text: text.to_string(),
+        ..Run::default()
+    }
+}
+
+/// Whether the runs hold no visible text.
+pub fn is_blank(runs: &[Run]) -> bool {
+    runs.iter().all(|r| r.text.trim().is_empty())
+}
+
+/// Runs of spaces become one space. The readers return headings and list
+/// items as flat Markdown with a space at every run boundary, so a second
+/// trip would otherwise widen every gap.
+pub fn collapse_spaces(runs: Vec<Run>) -> Vec<Run> {
+    runs.into_iter()
+        .map(|run| {
+            let mut text = String::with_capacity(run.text.len());
+            let mut last_space = false;
+            for c in run.text.chars() {
+                if c == ' ' {
+                    if !last_space {
+                        text.push(c);
+                    }
+                    last_space = true;
+                } else {
+                    text.push(c);
+                    last_space = false;
+                }
+            }
+            Run { text, ..run }
+        })
+        .collect()
+}
+
+/// Whitespace at either end of a linked run moved out of the link, as its
+/// own plain run. Both readers trim a link at its edges, so a space kept
+/// inside would be lost on the way back and the second trip would differ.
+pub fn outside_links(runs: &[Run]) -> Vec<Run> {
+    let mut out = Vec::with_capacity(runs.len());
+    for run in runs {
+        if run.href.is_none() {
+            out.push(run.clone());
+            continue;
+        }
+        let trimmed = run.text.trim();
+        let lead = run.text.len() - run.text.trim_start().len();
+        let trail = run.text.len() - run.text.trim_end().len();
+        if lead > 0 {
+            out.push(plain(&run.text[..lead]));
+        }
+        if !trimmed.is_empty() {
+            out.push(Run {
+                text: trimmed.to_string(),
+                ..run.clone()
+            });
+        }
+        if trail > 0 && !trimmed.is_empty() {
+            out.push(plain(&run.text[run.text.len() - trail..]));
+        }
+    }
+    out
+}
+
+/// Adjacent runs with the same formatting and link joined into one, so a
+/// writer emits one element for them.
+pub fn merge_adjacent(runs: Vec<Run>) -> Vec<Run> {
+    let mut out: Vec<Run> = Vec::with_capacity(runs.len());
+    for run in runs {
+        match out.last_mut() {
+            Some(last) if last.with_text(String::new()) == run.with_text(String::new()) => {
+                last.text.push_str(&run.text);
+            }
+            _ => out.push(run),
+        }
+    }
+    out
+}
+
 /// The runs of a node that carries them.
 pub fn from_inline_runs(runs: &[InlineRun]) -> Vec<Run> {
     runs.iter()
@@ -128,8 +209,10 @@ fn scan(chars: &[char], style: &Run, out: &mut Vec<Run>) {
         {
             flush(&mut plain, style, out);
             let uri: String = chars[anchor_end + 2..dest_end].iter().collect();
+            // A destination is written with docling's entities too; decoded,
+            // so that `&amp;` in a query string is the `&` it means.
             let linked = Run {
-                href: Some(uri),
+                href: Some(unescape_entities(&uri)),
                 ..style.with_text(String::new())
             };
             scan(&chars[i + 1..anchor_end], &linked, out);
@@ -390,6 +473,12 @@ mod tests {
                 plain(" *not bold*"),
             ]
         );
+    }
+
+    #[test]
+    fn a_destination_is_decoded() {
+        let runs = from_markdown("[edit](/w?title=Duck&amp;action=edit)");
+        assert_eq!(runs[0].href.as_deref(), Some("/w?title=Duck&action=edit"));
     }
 
     #[test]

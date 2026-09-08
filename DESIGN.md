@@ -265,18 +265,27 @@ level 1 would read back one level deeper than it went in.
 
 ### DOCX
 
+Written 2026-09-08, after ODT, on the same reader-first rule; where the
+row says the same as ODT's it is not repeated.
+
 | Node | DOCX |
 |---|---|
 | Heading level 1 | `w:pStyle w:val="Title"` |
-| Heading level N > 1 | `w:pStyle w:val="HeadingN-1"` with `styles.xml` naming it `heading N-1` and carrying `w:outlineLvl w:val="N-2"` |
-| Paragraph, InlineGroup | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`); links as `w:hyperlink r:id` with a relationship; `w:br`, `w:tab` |
-| ListItem | `w:numPr` with `w:ilvl` and a `w:numId`; ordered or bullet decided in `numbering.xml` by `w:numFmt`, which is the only signal the reader uses; one `w:num` per list so numbering restarts |
-| CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked`, which is what the reader detects |
-| Code | one `w:p` per line in a `SourceCode` style whose `w:rFonts` names Consolas; the reader keys on that style id and on the font |
-| Table | `w:tbl` with `w:tblGrid`; `w:gridSpan` and `w:vMerge` from `derive_cells()`; `w:tblHeader` on header rows for Word's sake, though the reader ignores it |
-| Picture | `w:drawing` with `a:blip r:embed` and the bytes under `word/media/`, or a placeholder paragraph when the node carries no bytes; caption as a following `Caption` paragraph |
+| Heading level N > 1 | `w:pStyle w:val="HeadingN-1"`, up to `Heading9`, with `styles.xml` naming it `heading N-1` and carrying `w:outlineLvl w:val="N-2"`; the reader reads all three and they agree |
+| Paragraph, InlineGroup | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`, Consolas `w:rFonts` for code); newlines as `w:br`, tabs as the character; links as `w:hyperlink r:id` with one relationship per distinct target and the `Hyperlink` character style, which the reader does not resolve; a blank paragraph is written as an empty `w:p`, because the reader returns one as an empty text node and that is how Word keeps a blank line |
+| ListItem | `w:numPr` with `w:ilvl` for the level and a `w:numId`; numbered or bullet is decided in `numbering.xml` by the level's `w:numFmt`, the only signal the reader uses; one definition per distinct vector of levels and one `w:num` per list, since the reader counts per `w:num`; a new `w:num` opens where the model says a list begins, where the kind changes at the top level, or where the count breaks, because the DOCX reader marks no item as first in its list and a jump in the number is the other sign of a new list |
+| CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
+| Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
+| Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
+| Picture | the caption first, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG |
 | Chart, Formula, FieldRegion, TextDump, Group and the wrappers | as for ODT |
-| PageBreak | `w:br w:type="page"` |
+| PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
+
+Style names avoid `heading`, `title` and `code` except where they mean it:
+the reader reads a style called `TableHeading` as a heading. The stock
+sheet is Times New Roman, Arial for headings and Consolas for code, the
+faces Liberation's are metric copies of, so the two targets set the same
+document the same way on each target's own application.
 
 Captions go before their table or picture, which is where docling's
 Markdown puts them. Both packages carry a stock style sheet written by
@@ -307,10 +316,11 @@ Writer for that job, and a machine without it skips the check and says so.
 **2026-09-08, the corpus test checks properties, not golden files.** The
 concept planned golden files regenerated on demand. Every document in
 docling.rs's own corpus for the Markdown, DOCX, ODF, HTML, PPTX and XLSX
-formats is read by docling, written, read back, and checked for three
-properties chosen to survive the diffs above: every piece of body text in
-the source is in the result, comparing letters and digits only; tables and
-pictures are as many as they were; and a second trip is a fixed point.
+formats is read by docling, written to each target, read back, and checked
+for three properties chosen to survive the diffs above: every piece of body
+text in the source is in the result, comparing letters and digits only and
+taking a cell's blocks in place of its flat text; tables and pictures are
+as many as they were; and a second trip is a fixed point.
 Golden files would have carried docling's reader output, which changes
 several times a week for reasons that are not this crate's, and every
 change would have been noise here. The properties hold across all of the
@@ -357,7 +367,25 @@ run without a marker sits in such a text, the second trip merges it into
 its neighbour and the space count around it changes; the corpus test
 compares with whitespace made uniform for that reason and no other.
 
-A page break is an empty paragraph, which the reader drops.
+A page break is an empty paragraph, which the ODF reader drops and the
+DOCX reader returns as an empty text node, as it does every blank
+paragraph.
+
+The DOCX reader has diffs of its own, all read from `docx.rs` on
+2026-09-08. A one-cell table is unwrapped into its content by design, so
+it does not return as a table; the corpus test does not count one for that
+target. Consecutive code blocks merge into one and blank lines inside a
+block are lost. A nested numbered list returns with docling's multilevel
+marker, `1.1.`, and the ordered form in the DocLang-only overlay, which is
+what the writer takes on the next trip. Underline and script survive in
+runs, so a paragraph keeps them, but every run comes back trimmed and the
+spacing lives in the Markdown, which is why §4's merge exists. A paragraph
+set wholly in the code font with a code-like character in it is read as a
+code block, so a paragraph that is one inline code span returns as code.
+The reader's relationship parser leaves an entity in a link target
+undecoded, so the scanner decodes the entities docling writes into a
+destination and writes the character; the file is right and the second
+trip is equal. Header rows beyond the first are lost as in ODT.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return. Reviewer comments are in that set for the first

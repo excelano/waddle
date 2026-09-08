@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, ValueEnum};
-use waddle_core::{Target, odt};
+use waddle_core::{Target, docx, odt};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -142,13 +142,10 @@ fn run(cli: &Cli) -> Result<(), Failure> {
         report.add(problem);
     }
     let out = match cli.to {
-        Target::Odt => odt::write(&doc).map_err(|e| Failure::Input(e.to_string()))?,
-        Target::Docx => {
-            return Err(Failure::Input(
-                "writing docx is not implemented".to_string(),
-            ));
-        }
-    };
+        Target::Odt => odt::write(&doc),
+        Target::Docx => docx::write(&doc),
+    }
+    .map_err(|e| Failure::Input(e.to_string()))?;
     for warning in &out.warnings {
         report.add(warning.to_string());
     }
