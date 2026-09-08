@@ -1,0 +1,50 @@
+name: ci
+
+# The checks themselves live in excelano/.github, so every Rust repo in the
+# fleet runs the same ones and a correction reaches all of them at once. What
+# stays here is when to run: that is this repo's business, the policy is the
+# fleet's.
+#
+# The second job is this repository's own. docling.rs releases several times a
+# week and has changed the document model inside a minor release; every match
+# on `Node` here is exhaustive so such a release fails the build rather than
+# dropping a node silently. This job builds against the newest docling-core
+# the pin admits, on every push and once a week regardless, so the failure is
+# seen the day the release lands rather than the day a downstream bumps its
+# pin. DESIGN.md §3.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: excelano/.github/.github/workflows/rust-ci.yml@main
+
+  docling-latest:
+    name: Newest docling-core
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component clippy
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Move docling-core to its newest release
+        run: cargo update -p docling-core && grep -A1 'name = "docling-core"' Cargo.lock
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace

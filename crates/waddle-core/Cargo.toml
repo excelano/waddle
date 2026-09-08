@@ -1,0 +1,18 @@
+[package]
+name = "waddle-core"
+description = "Write ODT and DOCX packages from a docling DoclingDocument"
+readme = "../../README.md"
+keywords = ["docling", "doclang", "odt", "docx", "opendocument"]
+categories = ["text-processing", "encoding"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+docling-core.workspace = true
+
+[package.metadata.dist]
+dist = false

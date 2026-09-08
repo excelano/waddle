@@ -1,0 +1,42 @@
+[package]
+name = "waddle"
+description = "Write ODT and DOCX from DocLang and docling JSON"
+homepage = "https://github.com/excelano/waddle"
+readme = "../../README.md"
+keywords = ["docling", "doclang", "odt", "docx", "converter"]
+categories = ["command-line-utilities", "text-processing"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "waddle"
+path = "src/main.rs"
+
+[dependencies]
+waddle-core.workspace = true
+clap.workspace = true
+
+[package.metadata.dist]
+formula = "waddle"
+
+[package.metadata.deb]
+maintainer = "David M. Anderson <david.anderson@excelano.com>"
+extended-description = """
+waddle writes an OpenDocument or Office Open XML package from a docling
+DoclingDocument: DocLang, a DocLang archive, or docling JSON in, ODT or DOCX
+out, offline and in pure Rust. docling.rs reads office documents and writes
+none; waddle is the writer. Output is deliberately plain, the document a
+well-structured Markdown file would give you opened in Writer or Word, and
+nothing is ever overwritten."""
+section = "utils"
+priority = "optional"
+depends = "libc6, libgcc-s1"
+assets = [
+    ["target/release/waddle", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/waddle/README.md", "644"],
+    ["LICENSE", "usr/share/doc/waddle/copyright", "644"],
+]
