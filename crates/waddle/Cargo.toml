@@ -45,6 +45,6 @@ priority = "optional"
 depends = "libc6, libgcc-s1"
 assets = [
     ["target/release/waddle", "usr/bin/", "755"],
-    ["README.md", "usr/share/doc/waddle/README.md", "644"],
-    ["LICENSE", "usr/share/doc/waddle/copyright", "644"],
+    ["../../README.md", "usr/share/doc/waddle/README.md", "644"],
+    ["../../LICENSE", "usr/share/doc/waddle/copyright", "644"],
 ]
