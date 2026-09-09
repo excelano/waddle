@@ -27,10 +27,10 @@ is the authority on this crate: §5 is the mapping, §6 what cannot round-trip
 and why. `git log` is the record of why everything is the way it is, and it is
 written to be read.
 
-A clone of docling.rs is at `~/clones/docling.rs` on David's machine; pull it
-before reading, it moves several times a week. Its
-`crates/docling/tests/data/<format>/sources/` is the corpus the round-trip
-tests draw on.
+The round-trip corpus is `crates/docling/tests/data/<format>/sources/` in a
+checkout of docling.rs, which moves several times a week — pull before reading
+it. Where that checkout lives is a fact about a machine and not about this
+repository, so it is not written down here.
 
 ---
 
