@@ -26,13 +26,23 @@ The construct chosen for each node is the one docling.rs's own reader for that f
 
 ## Install
 
-    curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/excelano/waddle/main/install.sh | sh
+Every install line ends with `waddle --install-skill`. That installs the [Claude Code skill](#use-it-from-claude-code) beside the binary. Drop it if you do not use Claude Code; the tool itself does not need it.
 
-Or `cargo install waddle`, or `apt install waddle` from the Excelano apt repository, or `brew install excelano/tap/waddle`. The uninstaller is `uninstall.sh` at the same URL shape.
+    curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/excelano/waddle/main/install.sh | sh && waddle --install-skill
+
+Or `cargo install waddle && waddle --install-skill`, or `sudo apt install waddle && waddle --install-skill` from the Excelano apt repository, or `brew install excelano/tap/waddle && waddle --install-skill`. The uninstaller is `uninstall.sh` at the same URL shape.
 
 ## Use it from Rust
 
 The library is `waddle-core`, and it depends on `docling-core` alone: no readers, no ML, no C. Give it a `DoclingDocument` and it returns the package bytes and the warnings it raised. [Duckling](https://github.com/excelano/duckling), the desktop converter over docling.rs, is the first caller.
+
+## Use it from Claude Code
+
+waddle was built for AI coding agents as much as for people, so the repository ships a [Claude Code](https://docs.claude.com/en/docs/claude-code) skill under `skills/waddle/`. It teaches an agent when waddle is the tool, how the input's pictures are found, what the warnings mean, and what each target keeps. The binary installs it:
+
+    waddle --install-skill
+
+That writes `~/.claude/skills/waddle/` and stamps in the version it came from, so a later run reports whether the skill has fallen behind the binary. It is safe to re-run: an unchanged skill reports `already current` and nothing is written. `waddle --uninstall-skill` removes it. Restart Claude Code afterwards, since skills are discovered at session start. The skill is compiled into the binary, so this works however waddle was installed.
 
 ## The family
 

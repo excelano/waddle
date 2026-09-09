@@ -197,6 +197,41 @@ fn docx_is_the_other_target() {
 }
 
 #[test]
+fn the_skill_installs_into_the_home_directory() {
+    let home = scratch("skill");
+    let out = Command::new(env!("CARGO_BIN_EXE_waddle"))
+        .arg("--install-skill")
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    let skill = home.join(".claude/skills/waddle/SKILL.md");
+    let body = std::fs::read_to_string(&skill).unwrap();
+    assert!(body.starts_with("---\nname: waddle\n"));
+    assert!(body.contains(&format!(
+        "This skill documents waddle {}",
+        env!("CARGO_PKG_VERSION")
+    )));
+    assert!(home.join(".claude/skills/waddle/reference.md").is_file());
+    let again = Command::new(env!("CARGO_BIN_EXE_waddle"))
+        .arg("--install-skill")
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .output()
+        .unwrap();
+    assert!(text(&again.stdout).contains("already current"));
+    let gone = Command::new(env!("CARGO_BIN_EXE_waddle"))
+        .arg("--uninstall-skill")
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .output()
+        .unwrap();
+    assert_eq!(gone.status.code(), Some(0));
+    assert!(!skill.exists());
+}
+
+#[test]
 fn nothing_is_overwritten() {
     let dir = scratch("overwrite");
     let path = write_dclg(&dir);

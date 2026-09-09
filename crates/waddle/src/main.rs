@@ -15,6 +15,7 @@
 mod assets;
 mod input;
 mod output;
+mod skill;
 
 use std::collections::BTreeMap;
 use std::io::IsTerminal;
@@ -36,11 +37,20 @@ Exit codes:
 #[command(version, about, after_help = EXIT_CODES)]
 struct Cli {
     /// DocLang (.dclg), DocLang archive (.dclx) or docling JSON; `-` reads stdin
-    input: PathBuf,
+    #[arg(required_unless_present_any = ["install_skill", "uninstall_skill"])]
+    input: Option<PathBuf>,
 
     /// Output format: odt or docx
-    #[arg(long, value_name = "FORMAT")]
-    to: Target,
+    #[arg(long, value_name = "FORMAT", required_unless_present_any = ["install_skill", "uninstall_skill"])]
+    to: Option<Target>,
+
+    /// Install the Claude Code skill for waddle under ~/.claude/skills and exit
+    #[arg(long, exclusive = true)]
+    install_skill: bool,
+
+    /// Remove that skill and exit
+    #[arg(long, exclusive = true)]
+    uninstall_skill: bool,
 
     /// Output file, or a directory to write into; the default is beside the input
     #[arg(short, long, value_name = "PATH")]
@@ -131,8 +141,13 @@ impl Report {
 }
 
 fn run(cli: &Cli) -> Result<(), Failure> {
-    let from_stdin = cli.input.as_os_str() == "-";
-    let input = input::read(&cli.input).map_err(Failure::Input)?;
+    let (Some(input_arg), Some(target)) = (&cli.input, cli.to) else {
+        return Err(Failure::Usage(
+            "an input and --to are required to write a document".to_string(),
+        ));
+    };
+    let from_stdin = input_arg.as_os_str() == "-";
+    let input = input::read(input_arg).map_err(Failure::Input)?;
     let mut doc = input::convert(&input).map_err(Failure::Input)?;
     let mut report = Report {
         colored: cli.color.enabled(),
@@ -141,7 +156,7 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     for problem in assets::resolve(&mut doc, &input) {
         report.add(problem);
     }
-    let out = match cli.to {
+    let out = match target {
         Target::Odt => odt::write(&doc),
         Target::Docx => docx::write(&doc),
     }
@@ -149,12 +164,12 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     for warning in &out.warnings {
         report.add(warning.to_string());
     }
-    let input_path: Option<&Path> = (!from_stdin).then_some(cli.input.as_path());
+    let input_path: Option<&Path> = (!from_stdin).then_some(input_arg.as_path());
     let destination = output::destination(
         input_path,
         &input.name,
         cli.output.as_deref(),
-        cli.to.extension(),
+        target.extension(),
     )
     .map_err(Failure::Usage)?;
     let destination = output::available(&destination);
@@ -185,6 +200,12 @@ fn run(cli: &Cli) -> Result<(), Failure> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if cli.install_skill {
+        return ExitCode::from(skill::install());
+    }
+    if cli.uninstall_skill {
+        return ExitCode::from(skill::uninstall());
+    }
     let (red, reset) = if cli.color.enabled() {
         ("\x1b[31m", "\x1b[0m")
     } else {
