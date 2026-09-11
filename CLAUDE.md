@@ -2,6 +2,8 @@
 
 Guidance for Claude Code working in `waddle`. Short because `DESIGN.md` is
 where the reasoning lives; read that before touching anything.
+This repo's prose documents follow the fleet documentation standard in
+`~/notes/doc_standards.md`.
 
 ---
 
