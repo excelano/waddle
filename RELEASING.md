@@ -9,11 +9,11 @@ not of its siblings.
 | | |
 |---|---|
 | Loop | cargo-dist |
-| Version lives in | `workspace.package.version` in the root `Cargo.toml`, once, for both crates |
+| Version lives in | `Cargo.toml` |
 | `apt-ship` argument | `waddle` |
-| crates | `waddle-core`, then `waddle` |
-| winget package | `Excelano.waddle` |
-| Windows asset | `waddle-x86_64-pc-windows-msvc.zip` |
+| Packages per release | 2, amd64 arm64 |
+| crates | `waddle-core` `waddle` |
+| winget package | `Excelano.waddle` — `waddle-x86_64-pc-windows-msvc.zip` |
 
 **Two crates, one version, one tag.** The workspace versions both crates
 together and `publish-crate.yml` publishes `waddle-core` before `waddle`.
