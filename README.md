@@ -30,7 +30,16 @@ Every install line ends with `waddle --install-skill`. That installs the [Claude
 
     curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/excelano/waddle/main/install.sh | sh && waddle --install-skill
 
-Or `cargo install waddle && waddle --install-skill`, or `sudo apt install waddle && waddle --install-skill` from the Excelano apt repository, or `brew install excelano/tap/waddle && waddle --install-skill`. The uninstaller is `uninstall.sh` at the same URL shape.
+Or `cargo install waddle && waddle --install-skill`, or
+`brew install excelano/tap/waddle && waddle --install-skill`. The uninstaller is
+`uninstall.sh` at the same URL shape.
+
+From the Excelano apt repository, add the repository once — waddle is not in the
+official archive, so `apt install` alone cannot find it — and it then updates
+with the rest of your system:
+
+    curl -fsSL https://excelano.com/apt/setup.sh | sudo sh
+    sudo apt install waddle && waddle --install-skill
 
 ## Use it from Rust
 
