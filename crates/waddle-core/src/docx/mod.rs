@@ -246,9 +246,12 @@ impl Writer {
                 }
             }
             Node::Table(table) => self.table(table, table.caption.as_deref()),
-            Node::Picture { caption, image, .. } => {
-                self.picture(caption.as_deref(), image.as_ref())
-            }
+            Node::Picture {
+                caption,
+                caption_href,
+                image,
+                ..
+            } => self.picture(caption.as_deref(), caption_href.as_deref(), image.as_ref()),
             Node::Formula { latex, orig, .. } => {
                 let source = if latex.is_empty() { orig } else { latex };
                 self.paragraph(Some("SourceCode"), &[plain(source)], false);
@@ -264,7 +267,7 @@ impl Writer {
             Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
                 self.table(table, caption.as_deref())
             }
-            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None),
+            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None, None),
             Node::FieldRegion { items } => {
                 let rows = items
                     .iter()
@@ -489,9 +492,14 @@ impl Writer {
 
     /// The caption, then the picture in its own paragraph. A picture without
     /// bytes is written as the grey placeholder and reported.
-    fn picture(&mut self, caption: Option<&str>, image: Option<&PictureImage>) {
+    fn picture(
+        &mut self,
+        caption: Option<&str>,
+        caption_href: Option<&str>,
+        image: Option<&PictureImage>,
+    ) {
         if let Some(caption) = caption {
-            self.paragraph(Some("Caption"), &inline::from_markdown(caption), false);
+            self.paragraph(Some("Caption"), &caption_runs(caption, caption_href), false);
         }
         let (media_type, bytes, (width_in, height_in)) = match image {
             Some(image) => (
@@ -658,6 +666,32 @@ mod tests {
         assert_eq!(writer.rels.len(), 1);
         // An empty caption is no paragraph, as it is no line in Markdown.
         assert_eq!(body.matches(r#"<w:pStyle w:val="Caption"/>"#).count(), 1);
+    }
+
+    #[test]
+    fn a_picture_caption_keeps_its_link() {
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::Picture {
+            caption: Some("Figure 1: the **rig**".into()),
+            caption_href: Some("https://a.org/rig".into()),
+            image: None,
+            classification: None,
+            caption_parent: CaptionParent::Body,
+        });
+        let mut writer = Writer::default();
+        writer.nodes(&doc.nodes);
+        assert!(writer.body.contains(r#"<w:pStyle w:val="Caption"/>"#));
+        // The annotation covers the whole caption, the bold run with it,
+        // and one relationship serves both runs; the other is the image part.
+        assert_eq!(writer.body.matches("<w:hyperlink r:id=").count(), 2);
+        assert_eq!(
+            writer
+                .rels
+                .iter()
+                .filter(|r| matches!(r, Rel::Hyperlink(_)))
+                .count(),
+            1
+        );
     }
 
     #[test]

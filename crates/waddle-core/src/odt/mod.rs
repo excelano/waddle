@@ -259,9 +259,12 @@ impl Writer {
                 self.paragraph("Preformatted_20_Text", &[plain(code)]);
             }
             Node::Table(table) => self.table(table, table.caption.as_deref()),
-            Node::Picture { caption, image, .. } => {
-                self.picture(caption.as_deref(), image.as_ref())
-            }
+            Node::Picture {
+                caption,
+                caption_href,
+                image,
+                ..
+            } => self.picture(caption.as_deref(), caption_href.as_deref(), image.as_ref()),
             Node::Formula { latex, orig, .. } => {
                 let source = if latex.is_empty() { orig } else { latex };
                 self.paragraph("Preformatted_20_Text", &[plain(source)]);
@@ -278,7 +281,7 @@ impl Writer {
             Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
                 self.table(table, caption.as_deref())
             }
-            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None),
+            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None, None),
             Node::FieldRegion { items } => {
                 let rows = items
                     .iter()
@@ -452,9 +455,14 @@ impl Writer {
 
     /// The caption, then the picture in its own paragraph. A picture without
     /// bytes is written as the grey placeholder and reported.
-    fn picture(&mut self, caption: Option<&str>, image: Option<&PictureImage>) {
+    fn picture(
+        &mut self,
+        caption: Option<&str>,
+        caption_href: Option<&str>,
+        image: Option<&PictureImage>,
+    ) {
         if let Some(caption) = caption {
-            self.paragraph("Caption", &inline::from_markdown(caption));
+            self.paragraph("Caption", &caption_runs(caption, caption_href));
         }
         let (media_type, bytes, width_in, height_in) = match image {
             Some(image) => {
@@ -720,6 +728,22 @@ mod tests {
             "table:number-columns-spanned=\"2\" office:value-type=\"string\"><text:p text:style-name=\"Table_20_Contents\">wide</text:p>\n</table:table-cell><table:covered-table-cell/>"
         ));
         assert!(xml.contains(r#"<text:p text:style-name="Table_20_Heading">A</text:p>"#));
+    }
+
+    #[test]
+    fn a_picture_caption_keeps_its_link() {
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::Picture {
+            caption: Some("Figure 1: the **rig**".into()),
+            caption_href: Some("https://a.org/rig".into()),
+            image: None,
+            classification: None,
+            caption_parent: CaptionParent::Body,
+        });
+        let xml = content_of(&doc);
+        assert!(xml.contains(r#"<text:p text:style-name="Caption">"#));
+        // The annotation covers the whole caption, the bold run with it.
+        assert_eq!(xml.matches(r#"xlink:href="https://a.org/rig""#).count(), 2);
     }
 
     #[test]
