@@ -18,7 +18,9 @@ use std::path::Path;
 use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
-use docling_core::{DoclingDocument, InlineRun, Node, Script, inline_paragraph_node};
+use docling_core::{
+    CaptionParent, DoclingDocument, InlineRun, Node, Script, inline_paragraph_node,
+};
 use waddle_core::{Output, Target, docx, odt};
 
 fn read_back(target: Target, bytes: Vec<u8>) -> DoclingDocument {
@@ -374,6 +376,7 @@ fn a_table_keeps_its_grid_spans_and_caption_text() {
         }),
         cell_blocks: None,
         caption: Some("Table 1: quarters".into()),
+        caption_parent: CaptionParent::Body,
         cells: None,
     }));
     let (back, out) = odt_trip(&doc);
@@ -411,6 +414,7 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
         caption_href: None,
         image: None,
         classification: None,
+        caption_parent: CaptionParent::Body,
     });
     // The placeholder the writer embeds is a valid PNG; take it from the
     // writer's own output to serve as real bytes for the second picture.
@@ -432,6 +436,7 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
             data: png,
         }),
         classification: None,
+        caption_parent: CaptionParent::Body,
     });
     doc.add_paragraph("after");
     let (back, out) = odt_trip(&doc);
@@ -651,6 +656,7 @@ fn docx_tables_pictures_code_and_checkboxes() {
         }),
         cell_blocks: None,
         caption: Some("Table 1: quarters".into()),
+        caption_parent: CaptionParent::Body,
         cells: None,
     }));
     doc.push(Node::Picture {
@@ -658,6 +664,7 @@ fn docx_tables_pictures_code_and_checkboxes() {
         caption_href: None,
         image: None,
         classification: None,
+        caption_parent: CaptionParent::Body,
     });
     doc.push(Node::Code {
         language: None,

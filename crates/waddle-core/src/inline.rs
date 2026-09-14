@@ -153,6 +153,20 @@ pub fn from_inline_runs(runs: &[InlineRun]) -> Vec<Run> {
         .collect()
 }
 
+/// A standalone caption's runs: its own inline markup, under the caption's
+/// hyperlink annotation. The annotation covers the whole caption, so it is
+/// applied to every run that carries no link of its own — which is what
+/// docling's Markdown renders as one link around the text.
+pub fn caption_runs(text: &str, href: Option<&str>) -> Vec<Run> {
+    let mut runs = from_markdown(text);
+    if let Some(href) = href {
+        for run in &mut runs {
+            run.href.get_or_insert_with(|| href.to_string());
+        }
+    }
+    runs
+}
+
 /// The runs of a text in docling's Markdown dialect.
 pub fn from_markdown(text: &str) -> Vec<Run> {
     let chars: Vec<char> = text.chars().collect();
@@ -371,6 +385,28 @@ fn unescape_entities(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_caption_annotation_covers_every_run_it_does_not_already_link() {
+        let runs = caption_runs(
+            "plain **bold** [own](https://b.org/)",
+            Some("https://a.org/"),
+        );
+        let links: Vec<Option<&str>> = runs.iter().map(|r| r.href.as_deref()).collect();
+        // The annotation reaches the plain and the bold run; the caption's own
+        // link keeps its target rather than being overwritten by it.
+        assert_eq!(
+            links,
+            vec![
+                Some("https://a.org/"),
+                Some("https://a.org/"),
+                Some("https://a.org/"),
+                Some("https://b.org/"),
+            ]
+        );
+        // Without an annotation the text's own markup is all there is.
+        assert_eq!(caption_runs("plain", None)[0].href, None);
+    }
 
     fn plain(t: &str) -> Run {
         Run {

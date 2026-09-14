@@ -134,6 +134,7 @@ fn count(nodes: &[Node], what: fn(Target, &Node) -> bool, target: Target) -> usi
                 ..
             } => count(children, what, target),
             Node::Located { inner, .. }
+            | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), what, target),
             n => usize::from(what(target, n)),

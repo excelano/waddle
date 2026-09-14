@@ -9,10 +9,11 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{DoclingDocument, Node, PictureImage, Table};
+use docling_core::{CaptionParent, DoclingDocument, Node, PictureImage, Table};
 
 use crate::inline::{
-    self, Position, Run, collapse_spaces, is_blank, merge_adjacent, outside_links, plain,
+    self, Position, Run, caption_runs, collapse_spaces, is_blank, merge_adjacent, outside_links,
+    plain,
 };
 use crate::list::Style as ListStyle;
 use crate::media::{self, PLACEHOLDER_PNG, PLACEHOLDER_SIZE_IN};
@@ -265,6 +266,14 @@ impl Writer {
                 let source = if latex.is_empty() { orig } else { latex };
                 self.paragraph("Preformatted_20_Text", &[plain(source)]);
             }
+            // A standalone caption: one no picture or table claimed, which
+            // the HTML backend emits for a figure that produced neither. The
+            // Caption style is the one this writer already gives a table's or
+            // picture's caption; the hyperlink annotation covers the whole
+            // text, as it does in docling's Markdown.
+            Node::Caption { text, href } => {
+                self.paragraph("Caption", &caption_runs(text, href.as_deref()));
+            }
             // A chart with its data is that data; one without is a picture.
             Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
                 self.table(table, caption.as_deref())
@@ -287,6 +296,9 @@ impl Writer {
                         structure: None,
                         cell_blocks: None,
                         caption: None,
+                        // No caption to hang, so the field is the default
+                        // every declarative backend leaves alone.
+                        caption_parent: CaptionParent::Body,
                         cells: None,
                     },
                     None,
@@ -306,6 +318,7 @@ impl Writer {
                 ..
             } => self.nodes(children),
             Node::Located { inner, .. }
+            | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::DoclangOnly(inner) => self.node(inner),
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
@@ -578,6 +591,43 @@ mod tests {
     }
 
     #[test]
+    fn a_standalone_caption_is_a_caption_paragraph_under_its_link() {
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::Caption {
+            text: "Figure 2: the rig".into(),
+            href: Some("https://a.org/rig".into()),
+        });
+        doc.push(Node::Caption {
+            text: String::new(),
+            href: None,
+        });
+        let xml = content_of(&doc);
+        assert!(xml.contains(r#"<text:p text:style-name="Caption">"#));
+        assert!(xml.contains(r#"xlink:href="https://a.org/rig""#));
+        assert!(xml.contains("Figure 2: the rig"));
+        // An empty caption is no paragraph, as it is no line in Markdown.
+        assert_eq!(xml.matches(r#"text:style-name="Caption""#).count(), 1);
+    }
+
+    #[test]
+    fn a_provenance_wrapper_is_written_as_what_it_wraps() {
+        let mut doc = DoclingDocument::new("t");
+        let mut inner = DoclingDocument::new("i");
+        inner.add_heading(2, "Wrapped");
+        let heading = inner.nodes.remove(0);
+        doc.push(Node::Prov {
+            inner: Box::new(heading),
+            page_no: 1,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            charspan: [0, 0],
+            seq: None,
+        });
+        let xml = content_of(&doc);
+        assert!(xml.contains("Wrapped"));
+        assert!(xml.contains(r#"text:outline-level="1""#));
+    }
+
+    #[test]
     fn title_and_headings_follow_the_reader_convention() {
         let mut doc = DoclingDocument::new("t");
         doc.add_heading(1, "Report");
@@ -660,6 +710,7 @@ mod tests {
             }),
             cell_blocks: None,
             caption: Some("Table 1: things".into()),
+            caption_parent: CaptionParent::Body,
             cells: None,
         }));
         let xml = content_of(&doc);
@@ -679,6 +730,7 @@ mod tests {
             caption_href: None,
             image: None,
             classification: None,
+            caption_parent: CaptionParent::Body,
         });
         let mut writer = Writer::default();
         writer.nodes(&doc.nodes);

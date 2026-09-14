@@ -118,6 +118,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             Node::Group { children, .. } => collect(children, out),
             Node::Furniture { inner, .. }
             | Node::Located { inner, .. }
+            | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::DoclangOnly(inner) => collect(std::slice::from_mut(&mut **inner), out),
             Node::Table(table) => {
@@ -135,6 +136,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::ListItem { .. }
             | Node::Code { .. }
             | Node::Formula { .. }
+            | Node::Caption { .. }
             | Node::FieldRegion { .. }
             | Node::InlineGroup { .. }
             | Node::CommentSection { .. }

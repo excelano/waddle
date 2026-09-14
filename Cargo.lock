@@ -378,13 +378,14 @@ dependencies = [
 
 [[package]]
 name = "docling"
-version = "1.37.4"
+version = "1.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fe7a69a3ad3cdfda8463d2ad11e78734f9a256d3d226acd0a03580b8274edc7"
+checksum = "4ea306398378a077b1672d0cb4aa0b91b27c05c659b4a24cc7ace0cfa9e59f5a"
 dependencies = [
  "calamine",
  "csv",
  "docling-core",
+ "encoding_rs",
  "flate2",
  "image",
  "mail-parser",
@@ -402,9 +403,9 @@ dependencies = [
 
 [[package]]
 name = "docling-core"
-version = "1.37.4"
+version = "1.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1efd548a1abce4c4816c497720670184cf0c406dd5278938e12bf9e24b4d60e1"
+checksum = "71906d5c14e903134fee5a11552eda5c01fd1afa85957daa16d6cceb0e8f59f5"
 dependencies = [
  "serde_json",
  "sha2",

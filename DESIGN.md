@@ -147,7 +147,7 @@ dropped silently; the compile error is the notification. And CI carries a
 job that runs `cargo update -p docling-core` before building, so drift is
 found the day a release lands rather than the day Duckling next bumps its
 pin. Dependabot's weekly pass covers the lockfile. The pin is
-`docling-core = "1.37"`, and it only moves forward.
+`docling-core = "1.49"`, and it only moves forward.
 
 ## 4. Inputs, and what the readers leave behind
 
@@ -256,11 +256,12 @@ level 1 would read back one level deeper than it went in.
 | Picture | the caption first, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized from the pixels at 96 dpi and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
 | Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; MathML is a later release |
+| Caption | a standalone caption, one no picture or table claimed: a `text:p` in the `Caption` style, the caption's hyperlink annotation applied to every run that carries no link of its own, which is the link docling's Markdown wraps the whole caption in; an empty one is no paragraph, as it is no line in Markdown |
 | FieldRegion | a two-column table of key and value |
 | TextDump | paragraphs split on blank lines |
 | PageBreak | an empty `text:p` in an automatic style with `fo:break-before="page"`; the reader drops an empty paragraph, so a break does not return |
 | Group | transparent, unless its layer is furniture, notes or invisible, in which case it and its children are dropped |
-| Located, Commented, DoclangOnly | the inner node |
+| Located, Prov, Commented, DoclangOnly | the inner node |
 | Furniture, PageFurniture, CommentSection, PageInfo | dropped |
 
 ### DOCX
@@ -278,7 +279,7 @@ row says the same as ODT's it is not repeated.
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
 | Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
 | Picture | the caption first, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG |
-| Chart, Formula, FieldRegion, TextDump, Group and the wrappers | as for ODT |
+| Chart, Formula, Caption, FieldRegion, TextDump, Group and the wrappers | as for ODT |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
 
 Style names avoid `heading`, `title` and `code` except where they mean it:

@@ -10,7 +10,7 @@ use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use docling_core::{DoclingDocument, Node, PictureImage};
+use docling_core::{CaptionParent, DoclingDocument, Node, PictureImage};
 
 /// A 16 by 12 grey PNG.
 const PNG: &[u8] = &[
@@ -66,6 +66,7 @@ fn document() -> DoclingDocument {
             data: PNG.to_vec(),
         }),
         classification: None,
+        caption_parent: CaptionParent::Body,
     });
     doc
 }

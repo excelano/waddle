@@ -17,7 +17,7 @@ waddle-core = { path = "crates/waddle-core", version = "0.1.1" }
 # newest release at the time of writing and only moves forward; DESIGN.md §3
 # says how a new release is noticed and why every match on `Node` is
 # exhaustive.
-docling-core = "1.37"
+docling-core = "1.49"
 clap = { version = "4.6", features = ["derive"] }
 # Package assembly. Defaults pull zstd, xz and bzip2; an office package only
 # ever stores or deflates, and the zlib-rs backend is pure Rust.
@@ -25,7 +25,7 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2-z
 # docling.rs's readers, for the binary's input and for the library's
 # round-trip tests. Without default features it is the pure-Rust declarative
 # converters and nothing that compiles C.
-docling = { version = "1.37", default-features = false }
+docling = { version = "1.49", default-features = false }
 # The binary's asset resolver: the picture sources docling's readers leave
 # behind. roxmltree and serde_json read them out of the input; image names
 # the format and size of the bytes found; every decoder here is pure Rust.
