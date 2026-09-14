@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/waddle-core", "crates/waddle"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["David M. Anderson"]
 license = "MIT"
@@ -12,7 +12,7 @@ repository = "https://github.com/excelano/waddle"
 rust-version = "1.88"
 
 [workspace.dependencies]
-waddle-core = { path = "crates/waddle-core", version = "0.1.1" }
+waddle-core = { path = "crates/waddle-core", version = "0.1.2" }
 # The DoclingDocument model and nothing else of docling's. The pin is the
 # newest release at the time of writing and only moves forward; DESIGN.md §3
 # says how a new release is noticed and why every match on `Node` is
