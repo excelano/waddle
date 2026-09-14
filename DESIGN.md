@@ -485,8 +485,14 @@ in §5: a level 1 heading starts a slide and titles it, a `PageBreak` starts an
 untitled one, and a document with neither is one slide. It was settled by
 reading the reader rather than by preference — `walk_presentation` delimits
 slides with level 1 headings and never with a `PageBreak`, so that is the
-inverse. PPTX is the sibling this leaves undone, and the rule carries over to
-it unchanged.
+inverse. PPTX is the sibling this leaves undone, and the rule does **not** carry over
+to it unchanged: its reader has a different document shape. `pptx.rs` gives
+each slide a `PageInfo`, wraps the slide's content in a `chapter` `Group`
+named `slide-<n>`, and emits a `PageBreak` for every slide after the first —
+placed after the *following* slide's content, an artifact its own module
+documents. Two of those three are nodes this crate currently drops or treats
+as transparent, so a PPTX writer is a design task of its own rather than the
+ODP walk over different XML.
 
 ## 8. The binary
 
