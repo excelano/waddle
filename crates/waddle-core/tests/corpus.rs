@@ -21,7 +21,7 @@ use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{DoclingDocument, Node};
-use waddle_core::{Target, docx, odp, ods, odt};
+use waddle_core::{Target, docx, odp, ods, odt, xlsx};
 
 const FORMATS: &[&str] = &["md", "docx", "odf", "html", "pptx", "xlsx"];
 
@@ -77,6 +77,7 @@ fn write(target: Target, doc: &DoclingDocument) -> Result<Vec<u8>, String> {
         Target::Docx => docx::write(doc),
         Target::Ods => ods::write(doc),
         Target::Odp => odp::write(doc),
+        Target::Xlsx => xlsx::write(doc),
     }
     .map(|out| out.bytes)
     .map_err(|e| e.to_string())
@@ -88,6 +89,7 @@ fn read_back(target: Target, name: &str, bytes: Vec<u8>) -> Result<DoclingDocume
         Target::Docx => InputFormat::Docx,
         Target::Ods => InputFormat::Ods,
         Target::Odp => InputFormat::Odp,
+        Target::Xlsx => InputFormat::Xlsx,
     };
     let source = SourceDocument::from_bytes(name, format, bytes);
     DocumentConverter::new()
@@ -206,7 +208,7 @@ fn sparse_in_a_sheet(target: Target, name: &str) -> bool {
 fn keeps_prose(target: Target) -> bool {
     match target {
         Target::Odt | Target::Docx | Target::Odp => true,
-        Target::Ods => false,
+        Target::Ods | Target::Xlsx => false,
     }
 }
 
@@ -432,7 +434,13 @@ fn corpus_round_trips() {
             continue;
         }
         for path in paths {
-            for target in [Target::Odt, Target::Docx, Target::Ods, Target::Odp] {
+            for target in [
+                Target::Odt,
+                Target::Docx,
+                Target::Ods,
+                Target::Odp,
+                Target::Xlsx,
+            ] {
                 checked += 1;
                 if let Err(problem) = check(target, &path) {
                     failures.push(format!(

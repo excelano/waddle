@@ -21,7 +21,7 @@ use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{
     CaptionParent, DoclingDocument, InlineRun, Node, Script, inline_paragraph_node,
 };
-use waddle_core::{Output, Target, docx, odp, ods, odt};
+use waddle_core::{Output, Target, docx, odp, ods, odt, xlsx};
 
 fn read_back(target: Target, bytes: Vec<u8>) -> DoclingDocument {
     let format = match target {
@@ -29,6 +29,7 @@ fn read_back(target: Target, bytes: Vec<u8>) -> DoclingDocument {
         Target::Docx => InputFormat::Docx,
         Target::Ods => InputFormat::Ods,
         Target::Odp => InputFormat::Odp,
+        Target::Xlsx => InputFormat::Xlsx,
     };
     let source = SourceDocument::from_bytes(format!("t.{target}"), format, bytes);
     DocumentConverter::new()
@@ -45,6 +46,7 @@ fn trip(target: Target, doc: &DoclingDocument) -> (DoclingDocument, Output) {
         Target::Docx => docx::write(doc),
         Target::Ods => ods::write(doc),
         Target::Odp => odp::write(doc),
+        Target::Xlsx => xlsx::write(doc),
     }
     .expect("the package writes");
     let name = format!(

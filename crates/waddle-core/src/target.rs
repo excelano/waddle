@@ -17,6 +17,8 @@ pub enum Target {
     Ods,
     /// OpenDocument Presentation.
     Odp,
+    /// Office Open XML SpreadsheetML.
+    Xlsx,
 }
 
 impl Target {
@@ -27,6 +29,7 @@ impl Target {
             Target::Docx => "docx",
             Target::Ods => "ods",
             Target::Odp => "odp",
+            Target::Xlsx => "xlsx",
         }
     }
 
@@ -39,6 +42,7 @@ impl Target {
             }
             Target::Ods => "application/vnd.oasis.opendocument.spreadsheet",
             Target::Odp => "application/vnd.oasis.opendocument.presentation",
+            Target::Xlsx => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }
     }
 }
@@ -57,7 +61,7 @@ impl fmt::Display for UnknownTarget {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "unknown output format `{}`; expected odt, docx, ods or odp",
+            "unknown output format `{}`; expected odt, docx, ods, odp or xlsx",
             self.0
         )
     }
@@ -74,6 +78,7 @@ impl FromStr for Target {
             "docx" => Ok(Target::Docx),
             "ods" => Ok(Target::Ods),
             "odp" => Ok(Target::Odp),
+            "xlsx" => Ok(Target::Xlsx),
             _ => Err(UnknownTarget(s.to_string())),
         }
     }
@@ -89,7 +94,7 @@ mod tests {
         assert_eq!("DOCX".parse::<Target>(), Ok(Target::Docx));
         assert_eq!(
             "pdf".parse::<Target>().unwrap_err().to_string(),
-            "unknown output format `pdf`; expected odt, docx, ods or odp"
+            "unknown output format `pdf`; expected odt, docx, ods, odp or xlsx"
         );
     }
 

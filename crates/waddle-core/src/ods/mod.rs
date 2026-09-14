@@ -3,7 +3,8 @@
 //!
 //! A spreadsheet has no place for prose, so this target writes the tabular
 //! nodes and reports every other node as dropped. `DESIGN.md` §7 settles that;
-//! §6 carries what the ODS reader cannot give back.
+//! §6 carries what the ODS reader cannot give back. The node walk is shared
+//! with XLSX in [`crate::sheet`]; what lives here is the package and its XML.
 //!
 //! The reader this writer answers to is `walk_spreadsheet` in docling.rs's
 //! `backend/odf.rs`. It reads cell *text* and nothing else: it flood-fills each
@@ -17,11 +18,12 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, DoclingDocument, Node, Table};
+use docling_core::DoclingDocument;
 
 use crate::Error;
 use crate::package::{self, Part};
-use crate::report::{Output, Reason, Warning};
+use crate::report::Output;
+use crate::sheet::{self, Sheet};
 use crate::target::Target;
 use crate::xml;
 
@@ -29,9 +31,9 @@ const STYLES: &str = include_str!("styles.xml");
 
 /// Write `doc` as an ODS package.
 pub fn write(doc: &DoclingDocument) -> Result<Output, Error> {
-    let mut writer = Writer::default();
-    writer.nodes(&doc.nodes);
-    let content = writer.content();
+    // ODF caps a sheet name at 127 characters where Excel stops at 31.
+    let (sheets, warnings) = sheet::collect(&doc.nodes, 127);
+    let content = content(&sheets);
     let parts = vec![
         Part {
             name: "mimetype",
@@ -55,10 +57,7 @@ pub fn write(doc: &DoclingDocument) -> Result<Output, Error> {
         },
     ];
     let bytes = package::zip(&parts)?;
-    Ok(Output {
-        bytes,
-        warnings: writer.warnings,
-    })
+    Ok(Output { bytes, warnings })
 }
 
 /// Fixed, because an ODS this writer produces has no picture parts: a
@@ -71,173 +70,47 @@ const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 </manifest:manifest>
 "#;
 
-#[derive(Default)]
-struct Writer {
-    body: String,
-    warnings: Vec<Warning>,
-    /// The sheet names already taken, in order, so a repeated caption and a
-    /// caption colliding with a generated name both still get a unique name.
-    names: Vec<String>,
-}
-
-impl Writer {
-    fn nodes(&mut self, nodes: &[Node]) {
-        for node in nodes {
-            self.node(node);
-        }
-    }
-
-    fn node(&mut self, node: &Node) {
-        match node {
-            Node::Table(table) => self.sheet(table, table.caption.as_deref()),
-            // A chart with its data is that data. One without has no cells to
-            // put in a sheet, so it goes the way of the prose.
-            Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
-                self.sheet(table, caption.as_deref())
-            }
-            // A field region is a table of keys and values in every other
-            // target, and the corpus counts it as one, so it is a sheet here.
-            Node::FieldRegion { items } => {
-                let rows = items
-                    .iter()
-                    .map(|item| {
-                        vec![
-                            item.key.clone().unwrap_or_default(),
-                            item.value.clone().unwrap_or_default(),
-                        ]
-                    })
-                    .collect();
-                self.sheet(
-                    &Table {
-                        rows,
-                        location: None,
-                        structure: None,
-                        cell_blocks: None,
-                        caption: None,
-                        caption_parent: CaptionParent::Body,
-                        cells: None,
-                    },
-                    None,
-                );
-            }
-            Node::Group {
-                layer: None,
-                children,
-                ..
-            } => self.nodes(children),
-            Node::Located { inner, .. }
-            | Node::Prov { inner, .. }
-            | Node::Commented { inner, .. }
-            | Node::DoclangOnly(inner) => self.node(inner),
-            Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
-            Node::Group { layer, .. } => self.warn(
-                node,
-                Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
-            ),
-            // Everything a spreadsheet has no cell for. Named rather than
-            // swept up, so a variant docling.rs adds fails the build here.
-            Node::Heading { .. }
-            | Node::Paragraph { .. }
-            | Node::CheckboxItem { .. }
-            | Node::ListItem { .. }
-            | Node::Code { .. }
-            | Node::Picture { .. }
-            | Node::Formula { .. }
-            | Node::Caption { .. }
-            | Node::Chart { .. }
-            | Node::InlineGroup { .. }
-            | Node::CommentSection { .. }
-            | Node::PageFurniture { .. }
-            | Node::PageBreak
-            | Node::PageInfo { .. }
-            | Node::TextDump(_) => self.warn(node, Reason::Unsupported),
-        }
-    }
-
-    fn warn(&mut self, node: &Node, reason: Reason) {
-        self.warnings.push(Warning {
-            node: crate::node::kind(node),
-            reason,
-        });
-    }
-
-    /// One sheet, a plain rectangular grid of string cells. Short rows are
-    /// padded to the widest, because a ragged row would leave a hole the
-    /// reader's flood fill could split the region on.
-    fn sheet(&mut self, table: &Table, caption: Option<&str>) {
-        let columns = table.rows.iter().map(Vec::len).max().unwrap_or(0);
-        if columns == 0 {
-            return;
-        }
-        let name = self.name_for(caption);
-        self.body.push_str(&format!(
+/// The sheets as `table:table` elements. The header band takes a bold cell
+/// style for the sake of someone opening the file; the reader returns every
+/// table with `structure: None`, so it is not the round trip's.
+fn content(sheets: &[Sheet]) -> String {
+    let mut body = String::new();
+    for sheet in sheets {
+        let columns = sheet.rows.first().map_or(0, Vec::len);
+        body.push_str(&format!(
             "<table:table table:name=\"{}\">\n<table:table-column table:number-columns-repeated=\"{columns}\"/>\n",
-            xml::attr(&name)
+            xml::attr(&sheet.name)
         ));
-        let cells = table.derive_cells();
-        let is_header = |r: usize| {
-            cells
-                .iter()
-                .filter(|c| c.start_row == r)
-                .all(|c| c.column_header)
-        };
-        let header_rows = (0..table.rows.len()).take_while(|&r| is_header(r)).count();
-        for (r, row) in table.rows.iter().enumerate() {
-            self.body.push_str("<table:table-row>");
-            for c in 0..columns {
-                let text = row.get(c).map_or("", String::as_str);
-                let style = if r < header_rows { "Header" } else { "Default" };
-                self.body.push_str(&format!(
+        for (r, row) in sheet.rows.iter().enumerate() {
+            body.push_str("<table:table-row>");
+            for text in row {
+                let style = if r < sheet.header_rows {
+                    "Header"
+                } else {
+                    "Default"
+                };
+                body.push_str(&format!(
                     "<table:table-cell table:style-name=\"{style}\" office:value-type=\"string\"><text:p>{}</text:p></table:table-cell>",
                     xml::text(text)
                 ));
             }
-            self.body.push_str("</table:table-row>\n");
+            body.push_str("</table:table-row>\n");
         }
-        self.body.push_str("</table:table>\n");
+        body.push_str("</table:table>\n");
     }
-
-    /// A sheet name: the caption where there is one, else `Sheet<n>`. ODF
-    /// requires the name to be unique within the document and forbids a
-    /// handful of characters in it; a collision takes a numeric suffix.
-    fn name_for(&mut self, caption: Option<&str>) -> String {
-        let base = caption
-            .map(|c| {
-                c.chars()
-                    .map(|ch| if "[]*?:/\\'".contains(ch) { ' ' } else { ch })
-                    .collect::<String>()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .filter(|c| !c.is_empty())
-            .map(|c| c.chars().take(31).collect::<String>())
-            .unwrap_or_else(|| format!("Sheet{}", self.names.len() + 1));
-        let mut name = base.clone();
-        let mut n = 2;
-        while self.names.contains(&name) {
-            name = format!("{base} {n}");
-            n += 1;
-        }
-        self.names.push(name.clone());
-        name
-    }
-
-    fn content(&self) -> String {
-        format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.3">
 <office:body><office:spreadsheet>
-{}</office:spreadsheet></office:body></office:document-content>
-"#,
-            self.body
-        )
-    }
+{body}</office:spreadsheet></office:body></office:document-content>
+"#
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use docling_core::{CaptionParent, Node, Table};
 
     fn table_of(rows: Vec<Vec<&str>>, caption: Option<&str>) -> Table {
         Table {
@@ -255,9 +128,7 @@ mod tests {
     }
 
     fn content_of(doc: &DoclingDocument) -> String {
-        let mut writer = Writer::default();
-        writer.nodes(&doc.nodes);
-        writer.content()
+        content(&sheet::collect(&doc.nodes, 127).0)
     }
 
     #[test]
@@ -310,18 +181,16 @@ mod tests {
         doc.add_heading(2, "Heading");
         doc.add_paragraph("prose");
         doc.push(Node::Table(table_of(vec![vec!["a"]], None)));
-        let mut writer = Writer::default();
-        writer.nodes(&doc.nodes);
+        let (sheets, warnings) = sheet::collect(&doc.nodes, 127);
         // The table is the only thing a spreadsheet has a cell for; the rest
         // is reported rather than dropped in silence. DESIGN.md §7.
-        assert_eq!(writer.body.matches("<table:table ").count(), 1);
-        let kinds: Vec<&str> = writer.warnings.iter().map(|w| w.node).collect();
+        assert_eq!(sheets.len(), 1);
+        let kinds: Vec<&str> = warnings.iter().map(|w| w.node).collect();
         assert_eq!(kinds, vec!["heading", "paragraph"]);
         assert!(
-            writer
-                .warnings
+            warnings
                 .iter()
-                .all(|w| w.reason == Reason::Unsupported)
+                .all(|w| w.reason == crate::report::Reason::Unsupported)
         );
     }
 

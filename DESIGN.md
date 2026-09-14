@@ -317,6 +317,31 @@ Spans are deliberately not written. The reader returns every table with
 a `covered-table-cell` counts as content to its flood fill and would only
 distort the region it finds.
 
+### XLSX
+
+The same walk as ODS, shared in `sheet.rs` so the two cannot drift: the tabular
+nodes become worksheets and every other node is reported as dropped. What
+differs is the package — `[Content_Types].xml`, `_rels/.rels`,
+`xl/workbook.xml` with its rels, and one `xl/worksheets/sheet<n>.xml` per
+sheet. Cells carry their text inline (`t="inlineStr"`), so there is no shared
+string table and no part to keep in step with one.
+
+| Node | XLSX |
+|---|---|
+| Table, Chart with data, FieldRegion | one worksheet, cells as inline strings at their own `A1` references, short rows padded to the widest |
+| Everything else | dropped and reported, as in ODS |
+
+Two differences from ODS are worth having. Excel caps a sheet name at 31
+characters where ODF allows 127, and Excel refuses a workbook with no sheet at
+all, so a document with no table gets one empty sheet rather than none.
+
+And the sheet name survives here. `backend/xlsx.rs` wraps each sheet in a
+`Group` labelled `sheet` and named for it, so a caption written as a sheet name
+comes back as that group's name — where the ODS reader does not read the name
+at all. The writer reads it back off the group when one is there, which is what
+makes a second trip land where the first did: without it the returned tables
+carry no caption and the sheet would be renamed `Sheet<n>`.
+
 ### ODP
 
 A presentation is slides, and the slide rule is the thread §9 left open. **A
@@ -391,6 +416,17 @@ Neither the DOCX nor the ODF reader associates a caption with a picture or
 table; every `Picture` and `Table` comes back with `caption: None` and a
 `Caption`-styled paragraph comes back as a paragraph. Only the JATS reader
 sets a table caption anywhere in the tree.
+
+The XLSX reader gives each sheet a `PageInfo`, wraps the sheet in a `Group`
+labelled `sheet`, wraps each table in a `Prov`, and trails a `PageBreak` after
+every sheet but the first. This writer reproduces none of that structure — it
+writes sheets — so a workbook read back carries it and a workbook written from
+that reads back the same way, which is what the fixed point asks. The sheet
+name is the one piece of it the writer does read, off the group.
+
+The two spreadsheet readers do not detect regions alike. The four corpus
+documents ODS parts into the wrong number of tables all pass as XLSX, so the
+named diffs below are ODS's rather than the family's.
 
 A slide with no title of its own is given one by the reader, from the page's
 `draw:name`, so an untitled slide returns carrying a level 1 heading the
@@ -474,11 +510,11 @@ DOCX second. `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`,
 `word/_rels/document.xml.rels`, `word/styles.xml`, `word/numbering.xml`,
 `word/media/`. The package plumbing from ODT carries over; the XML does not.
 
-ODS third and written, only for tables: one sheet per `Table` or `Chart`
-node, the caption or a generated name as the sheet name, header rows bold.
-§5 has the mapping and §6 what a sheet cannot give back. XLSX is the sibling
-this leaves undone; the node walk is the same and only the package and its XML
-differ.
+ODS and XLSX third, both written, only for tables: one sheet per `Table`,
+`Chart` with data or `FieldRegion`, the caption or a generated name as the
+sheet name, header rows bold in ODS. The node walk is shared in `sheet.rs`
+and only the package and its XML differ, which is what that file exists to
+keep true. §5 has the mapping and §6 what a sheet cannot give back.
 
 ODP fourth and written. The splitting rule §9 left open is settled and lives
 in §5: a level 1 heading starts a slide and titles it, a `PageBreak` starts an

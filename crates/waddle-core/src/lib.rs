@@ -26,7 +26,9 @@ pub mod ods;
 pub mod odt;
 mod package;
 pub mod report;
+pub mod sheet;
 pub mod target;
+pub mod xlsx;
 mod xml;
 
 /// The model crate, re-exported so a caller uses the version this crate
