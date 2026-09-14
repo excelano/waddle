@@ -13,6 +13,8 @@ pub enum Target {
     Odt,
     /// Office Open XML WordprocessingML.
     Docx,
+    /// OpenDocument Spreadsheet.
+    Ods,
 }
 
 impl Target {
@@ -21,6 +23,7 @@ impl Target {
         match self {
             Target::Odt => "odt",
             Target::Docx => "docx",
+            Target::Ods => "ods",
         }
     }
 
@@ -31,6 +34,7 @@ impl Target {
             Target::Docx => {
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             }
+            Target::Ods => "application/vnd.oasis.opendocument.spreadsheet",
         }
     }
 }
@@ -49,7 +53,7 @@ impl fmt::Display for UnknownTarget {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "unknown output format `{}`; expected odt or docx",
+            "unknown output format `{}`; expected odt, docx or ods",
             self.0
         )
     }
@@ -64,6 +68,7 @@ impl FromStr for Target {
         match s.to_ascii_lowercase().as_str() {
             "odt" => Ok(Target::Odt),
             "docx" => Ok(Target::Docx),
+            "ods" => Ok(Target::Ods),
             _ => Err(UnknownTarget(s.to_string())),
         }
     }
@@ -79,7 +84,7 @@ mod tests {
         assert_eq!("DOCX".parse::<Target>(), Ok(Target::Docx));
         assert_eq!(
             "pdf".parse::<Target>().unwrap_err().to_string(),
-            "unknown output format `pdf`; expected odt or docx"
+            "unknown output format `pdf`; expected odt, docx or ods"
         );
     }
 

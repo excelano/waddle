@@ -21,6 +21,7 @@ mod inline;
 mod list;
 mod media;
 pub mod node;
+pub mod ods;
 pub mod odt;
 mod package;
 pub mod report;

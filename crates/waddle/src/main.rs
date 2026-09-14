@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, ValueEnum};
-use waddle_core::{Target, docx, odt};
+use waddle_core::{Target, docx, ods, odt};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -40,7 +40,7 @@ struct Cli {
     #[arg(required_unless_present_any = ["install_skill", "uninstall_skill"])]
     input: Option<PathBuf>,
 
-    /// Output format: odt or docx
+    /// Output format: odt, docx or ods
     #[arg(long, value_name = "FORMAT", required_unless_present_any = ["install_skill", "uninstall_skill"])]
     to: Option<Target>,
 
@@ -159,6 +159,7 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     let out = match target {
         Target::Odt => odt::write(&doc),
         Target::Docx => docx::write(&doc),
+        Target::Ods => ods::write(&doc),
     }
     .map_err(|e| Failure::Input(e.to_string()))?;
     for warning in &out.warnings {

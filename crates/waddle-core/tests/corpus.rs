@@ -21,7 +21,7 @@ use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{DoclingDocument, Node};
-use waddle_core::{Target, docx, odt};
+use waddle_core::{Target, docx, ods, odt};
 
 const FORMATS: &[&str] = &["md", "docx", "odf", "html", "pptx", "xlsx"];
 
@@ -75,6 +75,7 @@ fn write(target: Target, doc: &DoclingDocument) -> Result<Vec<u8>, String> {
     match target {
         Target::Odt => odt::write(doc),
         Target::Docx => docx::write(doc),
+        Target::Ods => ods::write(doc),
     }
     .map(|out| out.bytes)
     .map_err(|e| e.to_string())
@@ -84,6 +85,7 @@ fn read_back(target: Target, name: &str, bytes: Vec<u8>) -> Result<DoclingDocume
     let format = match target {
         Target::Odt => InputFormat::Odt,
         Target::Docx => InputFormat::Docx,
+        Target::Ods => InputFormat::Ods,
     };
     let source = SourceDocument::from_bytes(name, format, bytes);
     DocumentConverter::new()
@@ -173,6 +175,36 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
             // No text of its own.
             Node::PageBreak => {}
         }
+    }
+}
+
+/// The corpus documents whose tables cannot survive a sheet, listed by name
+/// rather than tolerated in general. The ODS reader rebuilds a table by
+/// flood-filling the non-empty cells of a sheet, so a table whose filled cells
+/// are not 4-connected returns as several tables, and one with no filled cells
+/// at all does not return: `odf_presentation_02.odp` carries a 1x1 table
+/// holding an empty string, and a spreadsheet has no way to say that a table
+/// was there. The rest hold merged or sparse tables whose blank interiors are
+/// the gaps the flood fill parts on. DESIGN.md §6.
+const SPARSE_IN_A_SHEET: &[&str] = &[
+    "odf_presentation_01.odp",
+    "odf_presentation_02.odp",
+    "powerpoint_sample.pptx",
+    "word_tables.docx",
+];
+
+/// Whether this document's tables are among the ones a sheet cannot hold.
+fn sparse_in_a_sheet(target: Target, name: &str) -> bool {
+    target == Target::Ods && SPARSE_IN_A_SHEET.contains(&name)
+}
+
+/// ODS is a spreadsheet: it writes the tabular nodes and reports every other
+/// one as dropped (DESIGN.md §7), so the properties about body text and about
+/// pictures are not its to satisfy. The table count and the fixed point are.
+fn keeps_prose(target: Target) -> bool {
+    match target {
+        Target::Odt | Target::Docx => true,
+        Target::Ods => false,
     }
 }
 
@@ -321,7 +353,7 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
         })
         .collect();
     let mut problems = Vec::new();
-    if !missing.is_empty() {
+    if !missing.is_empty() && keeps_prose(target) {
         problems.push(format!(
             "{} of {} text pieces missing after the trip, first: {:?}",
             missing.len(),
@@ -337,14 +369,14 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
         count(&doc.nodes, Want::Tables, target),
         count(&back.nodes, Want::Tables, target),
     );
-    if tables != tables_back {
+    if tables != tables_back && !sparse_in_a_sheet(target, &name) {
         problems.push(format!("{tables} tables in, {tables_back} out"));
     }
     let (pictures, pictures_back) = (
         count(&doc.nodes, Want::Pictures, target),
         count(&back.nodes, Want::Pictures, target),
     );
-    if pictures != pictures_back {
+    if pictures != pictures_back && keeps_prose(target) {
         problems.push(format!("{pictures} pictures in, {pictures_back} out"));
     }
     let again = read_back(target, &name, write(target, &back)?)?;
@@ -354,7 +386,7 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
             .iter()
             .zip(&back.nodes)
             .all(|(a, b)| shape(a) == shape(b));
-    if !same {
+    if !same && !sparse_in_a_sheet(target, &name) {
         let first = again
             .nodes
             .iter()
@@ -398,7 +430,7 @@ fn corpus_round_trips() {
             continue;
         }
         for path in paths {
-            for target in [Target::Odt, Target::Docx] {
+            for target in [Target::Odt, Target::Docx, Target::Ods] {
                 checked += 1;
                 if let Err(problem) = check(target, &path) {
                     failures.push(format!(

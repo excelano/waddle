@@ -295,6 +295,28 @@ table paragraph styles, and a body font; list styles are generated per
 document because their levels depend on it. Nothing is inherited from any
 template in the first release; §9 has the template option.
 
+### ODS
+
+A spreadsheet holds cells, so this target writes the tabular nodes and reports
+every other one as dropped. One `table:table` per node, named for the caption
+where there is one and `Sheet<n>` where there is not, with the name sanitised:
+ODF forbids `[ ] * ? : / \` in a sheet name and requires it to be unique in the
+document, so a forbidden character becomes a space and a collision takes a
+numeric suffix.
+
+| Node | ODS |
+|---|---|
+| Table | one sheet, a plain rectangular grid of `table:table-cell` in `office:value-type="string"`; short rows padded to the widest, because a ragged row leaves a hole the reader parts on; the leading header rows in a bold cell style, for the reader's sake rather than the round trip's |
+| Chart | with data, its table as a sheet; without, dropped and reported |
+| FieldRegion | a sheet of its keys and values, as it is a table in every other target |
+| Group, Located, Prov, Commented, DoclangOnly | transparent, as elsewhere |
+| Everything else | dropped and reported: a spreadsheet has no cell for a heading, a paragraph, a list item, a picture, a formula or a page break |
+
+Spans are deliberately not written. The reader returns every table with
+`structure: None`, so a `table:number-columns-spanned` could not come back, and
+a `covered-table-cell` counts as content to its flood fill and would only
+distort the region it finds.
+
 ## 6. Round trip, and what cannot round-trip
 
 The conformance test is a round trip through docling.rs's readers: build a
@@ -339,6 +361,15 @@ Neither the DOCX nor the ODF reader associates a caption with a picture or
 table; every `Picture` and `Table` comes back with `caption: None` and a
 `Caption`-styled paragraph comes back as a paragraph. Only the JATS reader
 sets a table caption anywhere in the tree.
+
+The ODS reader rebuilds a table by flood-filling the non-empty cells of a
+sheet and emitting one table per connected region, always with
+`structure: None`. Three things follow, and the corpus test names the
+documents each one bites. A header band does not survive, nor does a span. The
+sheet name is not read at all, so a caption written as one does not come back.
+And a table whose filled cells are not 4-connected returns as several tables,
+while one with no filled cells at all does not return: a spreadsheet has no way
+to say that an empty table was there.
 
 Neither reader reads `w:tblHeader` or `table:table-header-rows`; the header
 band is always row 0 and only row 0. A table whose structure marks two
@@ -405,9 +436,11 @@ DOCX second. `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`,
 `word/_rels/document.xml.rels`, `word/styles.xml`, `word/numbering.xml`,
 `word/media/`. The package plumbing from ODT carries over; the XML does not.
 
-ODS and XLSX third, and only for tables: one sheet per `Table` or `Chart`
+ODS third and written, only for tables: one sheet per `Table` or `Chart`
 node, the caption or a generated name as the sheet name, header rows bold.
-Cheap once the two package writers exist, low priority.
+§5 has the mapping and §6 what a sheet cannot give back. XLSX is the sibling
+this leaves undone; the node walk is the same and only the package and its XML
+differ.
 
 ODP and PPTX last and not in the first release. A slide needs a splitting
 rule. Documents that came from PPTX, XLSX or a PDF carry `PageBreak` nodes

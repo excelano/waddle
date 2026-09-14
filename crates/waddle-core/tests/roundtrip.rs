@@ -21,12 +21,13 @@ use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{
     CaptionParent, DoclingDocument, InlineRun, Node, Script, inline_paragraph_node,
 };
-use waddle_core::{Output, Target, docx, odt};
+use waddle_core::{Output, Target, docx, ods, odt};
 
 fn read_back(target: Target, bytes: Vec<u8>) -> DoclingDocument {
     let format = match target {
         Target::Odt => InputFormat::Odt,
         Target::Docx => InputFormat::Docx,
+        Target::Ods => InputFormat::Ods,
     };
     let source = SourceDocument::from_bytes(format!("t.{target}"), format, bytes);
     DocumentConverter::new()
@@ -41,6 +42,7 @@ fn trip(target: Target, doc: &DoclingDocument) -> (DoclingDocument, Output) {
     let out = match target {
         Target::Odt => odt::write(doc),
         Target::Docx => docx::write(doc),
+        Target::Ods => ods::write(doc),
     }
     .expect("the package writes");
     let name = format!(
@@ -64,6 +66,10 @@ fn odt_trip(doc: &DoclingDocument) -> (DoclingDocument, Output) {
 
 fn docx_trip(doc: &DoclingDocument) -> (DoclingDocument, Output) {
     trip(Target::Docx, doc)
+}
+
+fn ods_trip(doc: &DoclingDocument) -> (DoclingDocument, Output) {
+    trip(Target::Ods, doc)
 }
 
 /// Convert the package to PDF with headless LibreOffice, each call in its
@@ -719,4 +725,77 @@ fn docx_tables_pictures_code_and_checkboxes() {
         }
     );
     assert_fixed_point_for(Target::Docx, &back);
+}
+
+/// The ODS target, against what the spreadsheet reader actually gives back.
+/// It reads cell text and nothing else: every table returns with
+/// `structure: None`, so the header band does not survive, and the sheet name
+/// is not read at all. DESIGN.md §6.
+#[test]
+fn ods_tables_come_back_as_tables_and_prose_is_reported() {
+    let mut doc = DoclingDocument::new("t");
+    doc.add_heading(2, "Dropped");
+    doc.add_paragraph("also dropped");
+    doc.push(Node::Table(docling_core::Table {
+        rows: vec![
+            vec!["Quarter".into(), "Revenue".into()],
+            vec!["Q1".into(), "100".into()],
+            vec!["Q2".into(), "150".into()],
+        ],
+        location: None,
+        structure: None,
+        cell_blocks: None,
+        caption: Some("Table 1: quarters".into()),
+        caption_parent: CaptionParent::Body,
+        cells: None,
+    }));
+    let (back, out) = ods_trip(&doc);
+
+    let tables: Vec<&docling_core::Table> = back
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Table(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tables.len(), 1, "{:?}", back.nodes);
+    assert_eq!(tables[0].rows.len(), 3);
+    assert_eq!(tables[0].rows[0], vec!["Quarter", "Revenue"]);
+    assert_eq!(tables[0].rows[2], vec!["Q2", "150"]);
+
+    // What the reader cannot give back, listed by name rather than tolerated.
+    assert!(tables[0].structure.is_none(), "no header band survives");
+    assert!(tables[0].caption.is_none(), "the sheet name is not read");
+
+    // The prose is gone, and the run said so rather than dropping it quietly.
+    let kinds: Vec<&str> = out.warnings.iter().map(|w| w.node).collect();
+    assert_eq!(kinds, vec!["heading", "paragraph"]);
+}
+
+/// A blank row inside a table is a gap, and the reader's flood fill splits a
+/// region on one. The table goes in whole and comes back as two. DESIGN.md §6.
+#[test]
+fn ods_splits_a_table_on_a_blank_row() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Table(docling_core::Table {
+        rows: vec![
+            vec!["a".into(), "b".into()],
+            vec![String::new(), String::new()],
+            vec!["c".into(), "d".into()],
+        ],
+        location: None,
+        structure: None,
+        cell_blocks: None,
+        caption: None,
+        caption_parent: CaptionParent::Body,
+        cells: None,
+    }));
+    let (back, _) = ods_trip(&doc);
+    let tables = back
+        .nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Table(_)))
+        .count();
+    assert_eq!(tables, 2, "{:?}", back.nodes);
 }
