@@ -25,13 +25,50 @@ use waddle_core::{Target, docx, odt};
 
 const FORMATS: &[&str] = &["md", "docx", "odf", "html", "pptx", "xlsx"];
 
-fn corpus() -> Option<PathBuf> {
+/// The crate's own data directory, and the repository-root mirror beside it.
+/// docling.rs 1.50 moved most sources out of the crate into a mirror at the
+/// repository root, leaving a `mirror.txt` manifest in their place, so a
+/// format's sources are now in either directory or both.
+fn corpus() -> Option<(PathBuf, PathBuf)> {
     let dir = match std::env::var_os("WADDLE_CORPUS") {
         Some(dir) => PathBuf::from(dir),
         None => PathBuf::from(std::env::var_os("HOME")?)
             .join("clones/docling.rs/crates/docling/tests/data"),
     };
-    dir.is_dir().then_some(dir)
+    if !dir.is_dir() {
+        return None;
+    }
+    // <root>/crates/docling/tests/data upwards four is <root>.
+    let mirror = dir
+        .ancestors()
+        .nth(4)
+        .map_or_else(PathBuf::new, |root| root.join("tests").join("data"));
+    Some((dir, mirror))
+}
+
+/// Every source a format has: the files the crate still carries itself, plus
+/// the ones its `mirror.txt` names in the repository-root mirror. The
+/// manifest is the authority rather than the mirror's directory listing,
+/// because the mirror keeps a rendered `.pdf` beside each source and those
+/// are not this suite's to read.
+fn sources((dir, mirror): &(PathBuf, PathBuf), format: &str) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir.join(format).join("sources"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .collect();
+    if let Ok(manifest) = std::fs::read_to_string(dir.join(format).join("mirror.txt")) {
+        for name in manifest.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            let path = mirror.join(format).join("sources").join(name);
+            if path.is_file() {
+                paths.push(path);
+            }
+        }
+    }
+    paths.sort();
+    paths
 }
 
 fn write(target: Target, doc: &DoclingDocument) -> Result<Vec<u8>, String> {
@@ -343,23 +380,23 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
 
 #[test]
 fn corpus_round_trips() {
-    let Some(dir) = corpus() else {
+    let Some(dirs) = corpus() else {
         eprintln!("no docling.rs corpus; skipping (WADDLE_CORPUS or ~/clones/docling.rs)");
         return;
     };
     let mut failures = Vec::new();
     let mut checked = 0;
     for format in FORMATS {
-        let sources = dir.join(format).join("sources");
-        let Ok(entries) = std::fs::read_dir(&sources) else {
+        let paths = sources(&dirs, format);
+        // A format that contributes nothing is a failure, not a quiet skip.
+        // Upstream moved its sources once already and the suite went from 228
+        // trips to 22 without saying so.
+        if paths.is_empty() {
+            failures.push(format!(
+                "{format}: no sources, in the crate directory or the mirror"
+            ));
             continue;
-        };
-        let mut paths: Vec<PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.is_file())
-            .collect();
-        paths.sort();
+        }
         for path in paths {
             for target in [Target::Odt, Target::Docx] {
                 checked += 1;
