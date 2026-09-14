@@ -108,61 +108,97 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
                     out.push(caption.clone());
                 }
             }
-            Node::Picture {
-                caption: Some(c), ..
-            } => out.push(c.clone()),
+            Node::Picture { caption, .. } => out.extend(caption.clone()),
+            // A standalone caption is a paragraph of its own, so its text
+            // comes back like any other paragraph's.
+            Node::Caption { text, .. } => out.push(text.clone()),
             Node::Group {
                 layer: None,
                 children,
                 ..
             } => body_text(children, out),
             Node::Located { inner, .. }
+            | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::DoclangOnly(inner) => body_text(std::slice::from_ref(inner), out),
-            _ => {}
+            // Written, but not as text this comparison can follow: a
+            // formula becomes its source in a code paragraph, a field
+            // region a table of its items, a text dump a run of paragraphs.
+            Node::Formula { .. } | Node::FieldRegion { .. } | Node::TextDump(_) => {}
+            // Dropped by the writer, by layer or by kind, so none of their
+            // text is expected on the way back. DESIGN.md §5.
+            Node::ListItem { .. }
+            | Node::Group { .. }
+            | Node::Furniture { .. }
+            | Node::PageFurniture { .. }
+            | Node::CommentSection { .. }
+            | Node::PageInfo { .. } => {}
+            // No text of its own.
+            Node::PageBreak => {}
         }
     }
 }
 
-fn count(nodes: &[Node], what: fn(Target, &Node) -> bool, target: Target) -> usize {
+/// What a trip counts: the nodes the writer turns into a table, and the
+/// nodes it turns into a picture.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Want {
+    Tables,
+    Pictures,
+}
+
+/// The DOCX reader unwraps a one-cell table into its content by design
+/// (DESIGN.md §6), so one is not counted for that target.
+fn one_cell(target: Target, table: &docling_core::Table) -> bool {
+    target == Target::Docx && table.rows.len() == 1 && table.rows[0].len() == 1
+}
+
+/// Every arm is spelled out: a variant docling.rs adds must fail the build
+/// here and be decided, as it does in the writers. A wildcard once counted a
+/// provenance-wrapped table as no table at all, and the corpus reported it as
+/// a round-trip diff rather than a compile error.
+fn count(nodes: &[Node], want: Want, target: Target) -> usize {
     nodes
         .iter()
-        .map(|n| match n {
+        .map(|node| match node {
             Node::Group {
                 layer: None,
                 children,
                 ..
-            } => count(children, what, target),
+            } => count(children, want, target),
             Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
-            | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), what, target),
-            n => usize::from(what(target, n)),
+            | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), want, target),
+            Node::Table(table) => usize::from(want == Want::Tables && !one_cell(target, table)),
+            // A field region is written as a table of its keys and values.
+            Node::FieldRegion { .. } => usize::from(want == Want::Tables),
+            // A chart with data is written as a table, one without as a
+            // picture.
+            Node::Chart { table, .. } => usize::from(match want {
+                Want::Tables => !table.rows.is_empty() && !one_cell(target, table),
+                Want::Pictures => table.rows.is_empty(),
+            }),
+            Node::Picture { .. } => usize::from(want == Want::Pictures),
+            // Neither a table nor a picture, in either target: written as
+            // something else, or dropped by layer or by kind.
+            Node::Heading { .. }
+            | Node::Paragraph { .. }
+            | Node::CheckboxItem { .. }
+            | Node::ListItem { .. }
+            | Node::Code { .. }
+            | Node::Formula { .. }
+            | Node::Caption { .. }
+            | Node::Group { .. }
+            | Node::InlineGroup { .. }
+            | Node::Furniture { .. }
+            | Node::CommentSection { .. }
+            | Node::PageFurniture { .. }
+            | Node::PageBreak
+            | Node::PageInfo { .. }
+            | Node::TextDump(_) => 0,
         })
         .sum()
-}
-
-/// A chart with data is written as a table, one without as a picture.
-/// The DOCX reader unwraps a one-cell table into its content by design
-/// (DESIGN.md §6), so one is not counted for that target.
-fn is_table(target: Target, n: &Node) -> bool {
-    let one_cell = |t: &docling_core::Table| {
-        target == Target::Docx && t.rows.len() == 1 && t.rows[0].len() == 1
-    };
-    match n {
-        Node::Table(t) => !one_cell(t),
-        Node::FieldRegion { .. } => true,
-        Node::Chart { table, .. } => !table.rows.is_empty() && !one_cell(table),
-        _ => false,
-    }
-}
-
-fn is_picture(_: Target, n: &Node) -> bool {
-    match n {
-        Node::Picture { .. } => true,
-        Node::Chart { table, .. } => table.rows.is_empty(),
-        _ => false,
-    }
 }
 
 /// A node with every run of whitespace in it made one space. The reader
@@ -261,15 +297,15 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
         ));
     }
     let (tables, tables_back) = (
-        count(&doc.nodes, is_table, target),
-        count(&back.nodes, is_table, target),
+        count(&doc.nodes, Want::Tables, target),
+        count(&back.nodes, Want::Tables, target),
     );
     if tables != tables_back {
         problems.push(format!("{tables} tables in, {tables_back} out"));
     }
     let (pictures, pictures_back) = (
-        count(&doc.nodes, is_picture, target),
-        count(&back.nodes, is_picture, target),
+        count(&doc.nodes, Want::Pictures, target),
+        count(&back.nodes, Want::Pictures, target),
     );
     if pictures != pictures_back {
         problems.push(format!("{pictures} pictures in, {pictures_back} out"));
