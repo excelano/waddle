@@ -21,13 +21,14 @@ use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{
     CaptionParent, DoclingDocument, InlineRun, Node, Script, inline_paragraph_node,
 };
-use waddle_core::{Output, Target, docx, ods, odt};
+use waddle_core::{Output, Target, docx, odp, ods, odt};
 
 fn read_back(target: Target, bytes: Vec<u8>) -> DoclingDocument {
     let format = match target {
         Target::Odt => InputFormat::Odt,
         Target::Docx => InputFormat::Docx,
         Target::Ods => InputFormat::Ods,
+        Target::Odp => InputFormat::Odp,
     };
     let source = SourceDocument::from_bytes(format!("t.{target}"), format, bytes);
     DocumentConverter::new()
@@ -43,6 +44,7 @@ fn trip(target: Target, doc: &DoclingDocument) -> (DoclingDocument, Output) {
         Target::Odt => odt::write(doc),
         Target::Docx => docx::write(doc),
         Target::Ods => ods::write(doc),
+        Target::Odp => odp::write(doc),
     }
     .expect("the package writes");
     let name = format!(
@@ -798,4 +800,68 @@ fn ods_splits_a_table_on_a_blank_row() {
         .filter(|n| matches!(n, Node::Table(_)))
         .count();
     assert_eq!(tables, 2, "{:?}", back.nodes);
+}
+
+/// The slide rule, through the reader that settles it: a level 1 heading
+/// opens a slide and becomes its title, and the reader gives that title back
+/// as a level 1 heading. A slide with no title of its own is given one from
+/// the page name, which is a heading the document did not have. DESIGN.md §6.
+#[test]
+fn odp_slides_split_on_level_one_headings_and_come_back() {
+    let mut doc = DoclingDocument::new("t");
+    doc.add_heading(1, "First slide");
+    doc.add_paragraph("one");
+    doc.add_heading(1, "Second slide");
+    doc.add_heading(2, "A sub-heading");
+    doc.add_paragraph("two");
+    let (back, _) = trip(Target::Odp, &doc);
+
+    let headings: Vec<(u8, &str)> = back
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Heading { level, text } => Some((*level, text.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        headings,
+        vec![
+            (1, "First slide"),
+            (1, "Second slide"),
+            (2, "A sub-heading"),
+        ],
+        "{:?}",
+        back.nodes
+    );
+    let paragraphs: Vec<&str> = back
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Paragraph { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(paragraphs, vec!["one", "two"]);
+}
+
+/// A page break opens a slide with no title, and the reader names that slide
+/// from its `draw:name` — a level 1 heading the document did not carry. It is
+/// the one thing a slide adds rather than loses. DESIGN.md §6.
+#[test]
+fn odp_an_untitled_slide_comes_back_named() {
+    let mut doc = DoclingDocument::new("t");
+    doc.add_paragraph("before");
+    doc.push(Node::PageBreak);
+    doc.add_paragraph("after");
+    let (back, _) = trip(Target::Odp, &doc);
+    let headings: Vec<&str> = back
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Heading { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(headings, vec!["Slide 1", "Slide 2"], "{:?}", back.nodes);
 }

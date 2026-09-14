@@ -317,6 +317,36 @@ Spans are deliberately not written. The reader returns every table with
 a `covered-table-cell` counts as content to its flood fill and would only
 distort the region it finds.
 
+### ODP
+
+A presentation is slides, and the slide rule is the thread §9 left open. **A
+level 1 heading starts a slide and becomes its title, a `PageBreak` starts a
+slide with no title, and a document with neither is one slide.** That is the
+inverse of the reader rather than a preference: `walk_presentation` gives every
+`<draw:page>` a level 1 heading, from a frame carrying
+`presentation:class="title"` where there is one and from the page's `draw:name`
+where there is not, and it never emits a `PageBreak`. So a deck read in carries
+one level 1 heading per slide, and writing it back puts each of them on a slide
+of its own. It agrees with the rule that level 1 is the document title: a
+document has one, and a document that is a deck has one per slide.
+
+| Node | ODP |
+|---|---|
+| Heading, level 1 | the slide, and a `draw:frame` with `presentation:class="title"` holding its text |
+| Heading, level 2 and deeper | `text:h` in the slide's text box at one outline level shallower, the inverse of the reader |
+| Paragraph, InlineGroup, CheckboxItem, Code, Formula, Caption, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
+| ListItem | `text:list`, which `add_odf_list` reads back; the stock marker style means an ordered list returns unordered |
+| Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it |
+| Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the grey PNG |
+| PageBreak | the slide boundary, and no element of its own |
+| Group, Located, Prov, Commented, DoclangOnly | transparent, resolved before the split so a wrapper cannot become a slide boundary |
+
+Text and blocks cannot share a frame: the reader takes a frame's tables and
+images from its *descendants* and its text from a `draw:text-box`, so a table
+nested in a table cell would be hoisted out of the cell and counted twice. A
+block nested in a cell is written as its text instead, and the nested node does
+not come back.
+
 ## 6. Round trip, and what cannot round-trip
 
 The conformance test is a round trip through docling.rs's readers: build a
@@ -361,6 +391,14 @@ Neither the DOCX nor the ODF reader associates a caption with a picture or
 table; every `Picture` and `Table` comes back with `caption: None` and a
 `Caption`-styled paragraph comes back as a paragraph. Only the JATS reader
 sets a table caption anywhere in the tree.
+
+A slide with no title of its own is given one by the reader, from the page's
+`draw:name`, so an untitled slide returns carrying a level 1 heading the
+document did not have. It is the one place a target adds content rather than
+losing it, and it is the reader's doing: `walk_presentation` names every page
+that has no visible title. A list on a slide returns unordered whatever it
+went in as, the marker style being the stock one, and a block nested in a
+table cell returns as text rather than as the table or picture it was.
 
 The ODS reader rebuilds a table by flood-filling the non-empty cells of a
 sheet and emitting one table per connected region, always with
@@ -442,10 +480,13 @@ node, the caption or a generated name as the sheet name, header rows bold.
 this leaves undone; the node walk is the same and only the package and its XML
 differ.
 
-ODP and PPTX last and not in the first release. A slide needs a splitting
-rule. Documents that came from PPTX, XLSX or a PDF carry `PageBreak` nodes
-and split there; documents that did not have only headings to split on.
-The rule is undecided; §9.
+ODP fourth and written. The splitting rule §9 left open is settled and lives
+in §5: a level 1 heading starts a slide and titles it, a `PageBreak` starts an
+untitled one, and a document with neither is one slide. It was settled by
+reading the reader rather than by preference — `walk_presentation` delimits
+slides with level 1 headings and never with a `PageBreak`, so that is the
+inverse. PPTX is the sibling this leaves undone, and the rule carries over to
+it unchanged.
 
 ## 8. The binary
 
@@ -491,8 +532,6 @@ A template. "Use this `.odt`'s `styles.xml`" or a `reference.docx` in the
 Pandoc manner is the step that makes the output institutional, and
 `~/notes/office_convert_branding.md` already argues for prepared reference
 files over generated themes. Worth doing once the plain output is right.
-
-The slide rule for ODP and PPTX, per §7.
 
 Formulas as MathML in ODT and OMML in DOCX rather than LaTeX source.
 
