@@ -29,7 +29,7 @@ docling = { version = "1.49", default-features = false }
 # The binary's asset resolver: the picture sources docling's readers leave
 # behind. roxmltree and serde_json read them out of the input; image names
 # the format and size of the bytes found; every decoder here is pure Rust.
-roxmltree = "0.20"
+roxmltree = "0.21"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp"] }
 
