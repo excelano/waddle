@@ -5,13 +5,14 @@ name: ci
 # stays here is when to run: that is this repo's business, the policy is the
 # fleet's.
 #
-# The second job is this repository's own. docling.rs releases several times a
-# week and has changed the document model inside a minor release; every match
-# on `Node` here is exhaustive so such a release fails the build rather than
-# dropping a node silently. This job builds against the newest docling-core
-# the pin admits, on every push and once a week regardless, so the failure is
-# seen the day the release lands rather than the day a downstream bumps its
-# pin. DESIGN.md §3.
+# The second job watches upstream rather than this repository. docling.rs
+# releases several times a week and has changed the document model inside a
+# minor release; every match on `Node` here is exhaustive, so such a release
+# breaks a build against the newest docling-core the pin admits while the
+# pinned build stays green. It runs weekly and opens an issue, because a push
+# that changes nothing upstream cannot change the answer, and a red tick on
+# every push for something no commit here caused is a check nobody reads.
+# DESIGN.md §3.
 #
 # The third installs LibreOffice and runs the round-trip tests, which open
 # every package they write in headless Writer when `soffice` is on the path
@@ -21,11 +22,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
   schedule:
     - cron: "17 6 * * 1"
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   ci:
@@ -33,6 +36,7 @@ jobs:
 
   docling-latest:
     name: Newest docling-core
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,13 +49,46 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Move docling-core to its newest release
-        run: cargo update -p docling-core && grep -A1 'name = "docling-core"' Cargo.lock
+        id: bump
+        run: |
+          cargo update -p docling-core
+          version=$(sed -n '/name = "docling-core"/{n;s/version = "\(.*\)"/\1/p;}' Cargo.lock)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "docling-core ${version}"
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        id: clippy
+        continue-on-error: true
+        run: cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tee "${RUNNER_TEMP}/probe.log"
 
       - name: Tests
-        run: cargo test --workspace
+        id: tests
+        if: steps.clippy.outcome == 'success'
+        continue-on-error: true
+        run: cargo test --workspace 2>&1 | tee -a "${RUNNER_TEMP}/probe.log"
+
+      # One open issue at a time, updated rather than duplicated. The run stays
+      # green: nothing in this repository is broken, and a release that is
+      # still green a week later closes nothing and files nothing.
+      - name: Say so in an issue
+        if: steps.clippy.outcome == 'failure' || steps.tests.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          title="docling-core ${VERSION} does not build here"
+          open=$(gh issue list --label upstream --state open \
+                   --search "in:title docling-core" --json number,title \
+                   --jq '.[0].number // empty')
+          body=$(printf 'The weekly probe built against docling-core %s and it failed. The pinned build is unaffected.\n\n```\n%s\n```\n\n%s\n' \
+                   "$VERSION" \
+                   "$(grep -E '^(error|warning)' "${RUNNER_TEMP}/probe.log" | head -20)" \
+                   "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --title "$title" --label upstream --body "$body"
+          fi
 
   writer:
     name: Opens in Writer
