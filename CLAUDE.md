@@ -93,6 +93,6 @@ assistance (Claude, Anthropic)` in its header comment. Commits carry a
 `Co-Authored-By` trailer for the Claude model in use and a `Signed-off-by`
 trailer for David, and no session URL.
 
-The release lane is cargo-dist, cloned from `excelano/xshape`; `RELEASING.md`
-carries what is waddle's. CI is the fleet's `excelano/.github` Rust workflow
+The release lane is cargo-dist, cloned from `excelano/xshape`;
+`ship.conf` carries what is waddle's. CI is the fleet's `excelano/.github` Rust workflow
 plus this repository's own `docling-latest` job.
