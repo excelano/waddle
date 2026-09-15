@@ -28,14 +28,12 @@ The construct chosen for each node is the one docling.rs's own reader for that f
 
 Every install line ends with `waddle --install-skill`. That installs the [Claude Code skill](#use-it-from-claude-code) beside the binary. Drop it if you do not use Claude Code; the tool itself does not need it.
 
-    curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/excelano/waddle/main/install.sh | sh && waddle --install-skill
+    cargo install waddle && waddle --install-skill
 
-Or `cargo install waddle && waddle --install-skill`, or
-`brew install excelano/tap/waddle && waddle --install-skill`. The uninstaller is
-`uninstall.sh` at the same URL shape.
+Or `brew install excelano/tap/waddle && waddle --install-skill`, or on Windows
+`winget install Excelano.waddle`.
 
-From the Excelano apt repository, add the repository once — waddle is not in the
-official archive, so `apt install` alone cannot find it — and it then updates
+From the Excelano apt repository, add the repository once and it then updates
 with the rest of your system:
 
     curl -fsSL https://excelano.com/apt/setup.sh | sudo sh
