@@ -1,13 +1,9 @@
 # waddle — design
 
-The reasoning behind the crate, in the order the decisions were made, each
-dated. `CLAUDE.md`, once there is code, is the short guide; this is the long
-one. `git log` is the record of how each section came to say what it says.
-
-Every claim about docling.rs below was checked on 2026-09-08 against the
-clone at `~/clones/docling.rs` at v1.37.4, which is byte-identical to the
-published `docling` and `docling-core` crates of that version. File
-references are to that tree.
+What the crate is and what it commits to. `CLAUDE.md` is the short guide; this
+is the authority. Every claim about docling.rs below is about the clone at
+`~/clones/docling.rs`, and file references are to that tree; it moves several
+times a week, so check a claim against it rather than against this file's age.
 
 ## 1. What this repository is
 
@@ -45,20 +41,14 @@ own holds, because the conversion is this crate's. Segler is the sibling on
 the other side: convert with Duckling, review and correct with Segler,
 publish with waddle.
 
-**2026-09-08, the name.** `waddle` and `waddle-core` are unclaimed on
-crates.io and `excelano/waddle` does not exist; the GitHub repositories of
-that name are a Club Penguin archive, a GPS parser and a Minecraft mod,
-none in this space. The crate, the binary and the presented name are all
-lowercase `waddle`, as for the rest of the CLI fleet; it is what a duckling
-does.
+**The name.** The crate, the binary and the presented name are all lowercase
+`waddle`, as for the rest of the CLI fleet; it is what a duckling does.
 
-**2026-09-08, not a fork and not a pull request.** docling.rs scopes itself
-to parity with Python docling, which has no writer and no plan for one, and
-its readers ignore what they do not recognise by design. A writer is a
-different kind of artefact from a reader and belongs in its own crate. If
-upstream ever wants the capability, the library is the thing to offer, and
-keeping it a separate crate with docling-core as its only docling
-dependency is what makes that offer cheap to accept.
+**A separate crate, not a fork and not a pull request.** docling.rs scopes
+itself to parity with Python docling, which has no writer, and its readers
+ignore what they do not recognise by design. A writer is a different kind of
+artefact from a reader. Keeping docling-core as this library's only docling
+dependency is what would make the capability cheap for upstream to accept.
 
 ## 2. What is being written
 
@@ -100,8 +90,7 @@ nodes. §6 records where that is impossible because the reader does not look.
 
 ## 3. Dependencies
 
-**2026-09-08, `waddle-core` depends on `docling-core` alone.** The concept
-had the library depending on `docling` for its readers. The readers are the
+**`waddle-core` depends on `docling-core` alone.** The readers are the
 binary's concern: Duckling already holds a `DoclingDocument` and needs no
 reader, and a library whose only docling dependency is the model crate is
 the one upstream could adopt. `docling-core` carries `serde_json` and `sha2`
@@ -114,12 +103,10 @@ the pure-Rust declarative converters. The DocLang and docling-JSON readers
 are declared without feature gates (`backend/mod.rs`), and the converter's
 dispatch to them is likewise ungated; the public path is
 `DocumentConverter::new().convert(SourceDocument::from_file(path)?)?.document`
-with the format sniffed from content and extension. Measured 2026-09-08 on
-this machine with the shared target directory: a crate depending on
-`docling` without defaults, `docling-core`, `quick-xml` and `zip` builds
-its full dependency tree in about seventeen seconds, and `cargo tree`
-shows no `-sys` crate, no `cc`, no pdfium, no ONNX Runtime, no oniguruma.
-That satisfies `~/notes/pure_rust_preference.md` without an exception, and
+with the format sniffed from content and extension. That dependency set
+carries no `-sys` crate, no `cc`, no pdfium, no ONNX Runtime and no
+oniguruma, so it satisfies `~/notes/pure_rust_preference.md` without an
+exception, and
 `waddle-core` must keep it that way: a change that adds a C dependency is a
 decision to take with David, not a cargo add.
 
@@ -128,26 +115,22 @@ zstd, xz and bzip2, and with the zlib-rs deflate backend, which is Rust.
 ODF requires the `mimetype` entry first and stored uncompressed, which
 `zip` supports per entry.
 
-**2026-09-08, the XML is pushed as strings.** The concept named `quick-xml`
-for the writer. docling-core's own serialisers build their output as
-strings, the vocabulary of each package is fixed and small, and what an XML
-writer library would add over that is an escape function, which is ten
+**The XML is pushed as strings.** docling-core's own serialisers build their
+output as strings, the vocabulary of each package is fixed and small, and what
+an XML writer library would add over that is an escape function, which is ten
 lines in `xml.rs`. The static parts, `styles.xml` and the manifest, are
 files included at compile time and edited as XML.
 
-**2026-09-08, keeping up with docling.rs.** Measured on the clone: seventy
-tags in the thirty days to 2026-09-08, and `document.rs` changed seventeen
-times in sixty days. Between 1.35 and 1.36 the `Group` variant gained two
-fields and `CommentSection` gained one, inside a minor release, which
-breaks any exhaustive match. Nothing in the model or the office readers
-changed from 1.36.0 to 1.37.4; those releases were PDF pipeline work. Two
-rules follow. The writers match `Node` exhaustively with no wildcard arm, so
-a new variant or field upstream fails the build here rather than being
-dropped silently; the compile error is the notification. And CI carries a
-job that runs `cargo update -p docling-core` before building, so drift is
-found the day a release lands rather than the day Duckling next bumps its
-pin. Dependabot's weekly pass covers the lockfile. The pin is
-`docling-core = "1.49"`, and it only moves forward.
+**Keeping up with docling.rs.** It releases several times a week and has
+changed the document model inside a minor release: between 1.35 and 1.36 the
+`Group` variant gained two fields and `CommentSection` gained one, which breaks
+any exhaustive match. Two rules follow. The writers match `Node` exhaustively
+with no wildcard arm, so a new variant or field upstream fails the build here
+rather than being dropped silently, and the compile error is the notification.
+And `ci.yml` carries a weekly job that runs `cargo update -p docling-core`
+before building and opens an issue when that build breaks; it does not run on a
+push, because a push cannot change what upstream released. Dependabot's pass
+covers the lockfile. The pin only moves forward.
 
 ## 4. Inputs, and what the readers leave behind
 
@@ -155,8 +138,7 @@ The CLI's inputs are docling.rs's three lossless serialisations: bare
 DocLang (`.dclg`), the DocLang archive (`.dclx`, an OPC zip with
 `document.xml`, optional `pages/N.png` and `assets/`), and docling JSON.
 All three are read by docling.rs and reach waddle as a `DoclingDocument`.
-Three facts about those readers shape the binary, all checked on
-2026-09-08.
+Three facts about those readers shape the binary.
 
 **Picture bytes do not come back.** The DocLang reader's `parse_picture`
 reads the caption, the chart class and the layer and, by its own doc
@@ -167,7 +149,7 @@ populate `PictureImage`. So a `DoclingDocument` that arrives through the
 CLI has captions and placeholders and no pixels, while one that arrives
 through Duckling has the bytes because Duckling converted the original.
 
-**2026-09-08, the binary resolves picture assets itself.** After docling's
+**The binary resolves picture assets itself.** After docling's
 reader has produced the document, the CLI reads the picture sources from
 the input in document order and pairs them with the picture nodes by
 ordinal. For DocLang that is every `<picture>` element's `<src uri>`, for
@@ -194,13 +176,10 @@ wrapped in `Node::InlineGroup { runs, md_text }`; a paragraph with a single
 plain run collapses to `Node::Paragraph`. The Markdown and PPTX readers
 construct none.
 
-**2026-09-08, a scanner of docling's dialect, and the runs are the text.**
-The concept's first answer was `pulldown-cmark`. Building the writer showed
-why not: a paragraph string is inline by definition, and a Markdown parser
-reads block structure, raw HTML and entities into it. docling-core's own
-`inline_runs_from_markdown` was the other candidate; it keeps no link
-target and trims every run. So `inline.rs` is a scanner of the dialect
-docling emits and nothing more: `***`, `**`, `*`, `~~`, backticks,
+**A scanner of docling's dialect, and the runs are the text.** A general
+Markdown parser is the wrong tool: a paragraph string is inline by definition,
+and a parser reads block structure, raw HTML and entities into it. So
+`inline.rs` is a scanner of the dialect docling emits and nothing more: `***`, `**`, `*`, `~~`, backticks,
 `[text](url)`, backslash escapes and the HTML entities docling writes for
 `&`, `<` and `>`, with CommonMark's rule that a marker opens against
 non-space and closes after it, so that `2 * 3 ** 4` stays arithmetic.
@@ -209,8 +188,8 @@ A node that carries structured runs also carries the Markdown docling built
 from them, and each side knows something the other does not. The runs have
 the exact characters and the underline and script that have no marker; the
 Markdown has the hyperlinks, since `InlineRun` has no field for one. Whose
-spacing to trust depends on the reader, and the corpus settled it on
-2026-09-08: the ODF reader keeps a paragraph's spaces in its runs, while
+spacing to trust depends on the reader: the ODF reader keeps a paragraph's
+spaces in its runs, while
 the DOCX and HTML readers trim every run and join them with single spaces
 in the Markdown, so that "the runs are the text" glued a Word document's
 words together. The Markdown's own spacing is docling's, with a space at
@@ -219,18 +198,15 @@ link targets are copied onto them aligned character by character with
 whitespace set aside, and only for a paragraph whose runs carry no edge
 whitespace at all is a single space put between two runs where the
 Markdown has one. A space between two runs is linked only when both sides
-are. The first merge took the text from the Markdown and was caught by the
-fixed-point test: each trip through the reader added spaces. Brackets
-inside a link's anchor balance, as CommonMark has them, because Wikipedia
-writes its citation marks as `[[ 1 ]](#note)`.
+are. Brackets inside a link's anchor balance, as CommonMark has them, because
+Wikipedia writes its citation marks as `[[ 1 ]](#note)`.
 
-**2026-09-08, Segler's DOM is the second front end, later, if ever.**
-`segler-core` is the fleet's lossless DocLang reader and would return
-underline, links and picture sources that docling's reader drops. Taking it
-would mean a second input model beside `DoclingDocument` and would sever the
-Duckling path, so it is not the first release. It is the answer if the
-DocLang path ever needs more than docling's reader gives and upstream will
-not take the fixes.
+**Segler's DOM is the second front end, if ever.** `segler-core` is the
+fleet's lossless DocLang reader and would return the underline, links and
+picture sources that docling's reader drops. Taking it would mean a second
+input model beside `DoclingDocument` and would sever the Duckling path. It is
+the answer if the DocLang path ever needs more than docling's reader gives and
+upstream will not take the fixes.
 
 ## 5. Node to target mapping
 
@@ -266,8 +242,8 @@ level 1 would read back one level deeper than it went in.
 
 ### DOCX
 
-Written 2026-09-08, after ODT, on the same reader-first rule; where the
-row says the same as ODT's it is not repeated.
+On the same reader-first rule as ODT; where a row says the same as ODT's it is
+not repeated.
 
 | Node | DOCX |
 |---|---|
@@ -293,7 +269,7 @@ Markdown puts them. Both packages carry a stock style sheet written by
 waddle: the heading family, Title, Subtitle, Caption, the code, list and
 table paragraph styles, and a body font; list styles are generated per
 document because their levels depend on it. Nothing is inherited from any
-template in the first release; §9 has the template option.
+template.
 
 ### ODS
 
@@ -344,8 +320,8 @@ carry no caption and the sheet would be renamed `Sheet<n>`.
 
 ### ODP
 
-A presentation is slides, and the slide rule is the thread §9 left open. **A
-level 1 heading starts a slide and becomes its title, a `PageBreak` starts a
+A presentation is slides. **A level 1 heading starts a slide and becomes its
+title, a `PageBreak` starts a
 slide with no title, and a document with neither is one slide.** That is the
 inverse of the reader rather than a preference: `walk_presentation` gives every
 `<draw:page>` a level 1 heading, from a frame carrying
@@ -378,8 +354,8 @@ The conformance test is a round trip through docling.rs's readers: build a
 `DoclingDocument`, write the package, read it back with
 `DocumentConverter` as `InputFormat::Odt` or `InputFormat::Docx`, and
 compare. docling.rs's own `dclx_roundtrip.rs` compares the two Markdown
-exports. waddle's harness makes three comparisons, weakest to strongest,
-settled on 2026-09-08 when the first trip ran. The Markdown exports agree
+exports. waddle's harness makes three comparisons, weakest to strongest. The Markdown
+exports agree
 once whitespace is set aside, and no closer, because the ODF reader rebuilds
 a paragraph's Markdown from its runs with docling's own spacing. The
 structured runs come back with their text and formatting, which is where
@@ -391,8 +367,7 @@ harness also opens every package in headless Writer and converts it to
 PDF, the cheapest proof that it loads without a repair prompt; CI installs
 Writer for that job, and a machine without it skips the check and says so.
 
-**2026-09-08, the corpus test checks properties, not golden files.** The
-concept planned golden files regenerated on demand. Every document in
+**The corpus test checks properties, not golden files.** Every document in
 docling.rs's own corpus for the Markdown, DOCX, ODF, HTML, PPTX and XLSX
 formats is read by docling, written to each target, read back, and checked
 for three properties chosen to survive the diffs above: every piece of body
@@ -409,8 +384,8 @@ without it. `WADDLE_CORPUS_WRITER=1` opens every corpus package in Writer
 as well, a second per document.
 
 Some diffs are inherent because the reader does not look, and the test
-suite lists them by name rather than tolerating diffs in general. Read on
-2026-09-08 from the readers:
+suite lists them by name rather than tolerating diffs in general. From the
+readers:
 
 Neither the DOCX nor the ODF reader associates a caption with a picture or
 table; every `Picture` and `Table` comes back with `caption: None` and a
@@ -477,8 +452,8 @@ A page break is an empty paragraph, which the ODF reader drops and the
 DOCX reader returns as an empty text node, as it does every blank
 paragraph.
 
-The DOCX reader has diffs of its own, all read from `docx.rs` on
-2026-09-08. A one-cell table is unwrapped into its content by design, so
+The DOCX reader has diffs of its own, all read from `docx.rs`. A one-cell
+table is unwrapped into its content by design, so
 it does not return as a table; the corpus test does not count one for that
 target. Consecutive code blocks merge into one and blank lines inside a
 block are lost. A nested numbered list returns with docling's multilevel
@@ -494,41 +469,38 @@ destination and writes the character; the file is right and the second
 trip is equal. Header rows beyond the first are lost as in ODT.
 
 Everything on the furniture, notes and invisible layers is dropped on the
-way out and cannot return. Reviewer comments are in that set for the first
-release; §9 has them as the obvious second.
+way out and cannot return, and reviewer comments are in that set.
 
 The writer reports each of these as a warning naming the node and the
 reason, and `--strict` turns any of them into a refusal.
 
-## 7. Targets, in order
+## 7. The five packages
 
-ODT first. One `content.xml`, a small `styles.xml`, `META-INF/manifest.xml`,
-`mimetype` stored first, `Pictures/` when there are bytes. Least ceremony
-of the four, and the spec is readable.
+**ODT.** One `content.xml`, a small `styles.xml`, `META-INF/manifest.xml`,
+`mimetype` stored first, `Pictures/` when there are bytes.
 
-DOCX second. `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`,
+**DOCX.** `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`,
 `word/_rels/document.xml.rels`, `word/styles.xml`, `word/numbering.xml`,
-`word/media/`. The package plumbing from ODT carries over; the XML does not.
+`word/media/`. The package plumbing is ODT's; the XML is not.
 
-ODS and XLSX third, both written, only for tables: one sheet per `Table`,
-`Chart` with data or `FieldRegion`, the caption or a generated name as the
-sheet name, header rows bold in ODS. The node walk is shared in `sheet.rs`
-and only the package and its XML differ, which is what that file exists to
-keep true. §5 has the mapping and §6 what a sheet cannot give back.
+**ODS and XLSX**, only for tables: one sheet per `Table`, `Chart` with data or
+`FieldRegion`, the caption or a generated name as the sheet name, header rows
+bold in ODS. The node walk is shared in `sheet.rs` and only the package and its
+XML differ, which is what that file exists to keep true. §5 has the mapping and
+§6 what a sheet cannot give back.
 
-ODP fourth and written. The splitting rule §9 left open is settled and lives
-in §5: a level 1 heading starts a slide and titles it, a `PageBreak` starts an
-untitled one, and a document with neither is one slide. It was settled by
-reading the reader rather than by preference — `walk_presentation` delimits
-slides with level 1 headings and never with a `PageBreak`, so that is the
-inverse. PPTX is the sibling this leaves undone, and the rule does **not** carry over
-to it unchanged: its reader has a different document shape. `pptx.rs` gives
-each slide a `PageInfo`, wraps the slide's content in a `chapter` `Group`
-named `slide-<n>`, and emits a `PageBreak` for every slide after the first —
-placed after the *following* slide's content, an artifact its own module
-documents. Two of those three are nodes this crate currently drops or treats
-as transparent, so a PPTX writer is a design task of its own rather than the
-ODP walk over different XML.
+**ODP.** A level 1 heading starts a slide and titles it, a `PageBreak` starts an
+untitled one, and a document with neither is one slide. That is the inverse of
+the reader rather than a preference: `walk_presentation` delimits slides with
+level 1 headings and never with a `PageBreak`.
+
+**PPTX is not written, and the ODP rule does not carry over to it.** Its reader
+has a different document shape: `pptx.rs` gives each slide a `PageInfo`, wraps
+the slide's content in a `chapter` `Group` named `slide-<n>`, and emits a
+`PageBreak` for every slide after the first, placed after the *following*
+slide's content. Two of those three are nodes this crate drops or treats as
+transparent, so a PPTX writer is a design task of its own rather than the ODP
+walk over different XML.
 
 ## 8. The binary
 
@@ -553,38 +525,14 @@ document with forty placeholder pictures says so once. `--color
 auto|always|never` with `NO_COLOR` honoured, nothing on stdout but the path
 written. The contract is the fleet's and `--help` states it.
 
-## 9. Open threads
-
-The upstream issues waddle's tests will produce, David's to raise on
-docling.rs: the DocLang reader ignores `<src>`; no office reader associates
-captions; `w:tblHeader` and `table:table-header-rows` are ignored; the ODF
-reader detects neither code nor checkboxes. Each is a round-trip diff this
-repository documents until it is fixed there.
-
-Reviewer comments. `CommentSection` and `Commented` are in the model since
-1.34 and 1.36, DOCX has `comments.xml` and ODF has `office:annotation`,
-and the DOCX reader already reads them back. The first release drops them
-with a warning; the second should write them.
-
-Headers and footers. `PageFurniture` carries footer text and a location.
-ODT's `styles.xml` master page and DOCX's `header1.xml` can hold it. Not in
-the first release.
-
-A template. "Use this `.odt`'s `styles.xml`" or a `reference.docx` in the
-Pandoc manner is the step that makes the output institutional, and
-`~/notes/office_convert_branding.md` already argues for prepared reference
-files over generated themes. Worth doing once the plain output is right.
-
-Formulas as MathML in ODT and OMML in DOCX rather than LaTeX source.
-
-## 10. Non-goals
+## 9. Non-goals
 
 Reproducing the look of the original document. Editing or merging existing
 office files; input is a `DoclingDocument`, output is a new package.
 Reading office formats, which is docling.rs's job. A window, which is
 Duckling's.
 
-## 11. Duckling integration
+## 10. Duckling integration
 
 Duckling adds `waddle-core` as a dependency at a version whose
 `docling-core` unifies with its own `docling`'s. Its output picker gains

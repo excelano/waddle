@@ -8,7 +8,7 @@
 //! level 1 headings and never with a `PageBreak`, and this writer does the
 //! inverse.
 //!
-//! **The slide rule**, the thread `DESIGN.md` §9 left open: a level 1 heading
+//! **The slide rule**, which `DESIGN.md` §7 states: a level 1 heading
 //! starts a slide and becomes its title, a `PageBreak` starts a slide with no
 //! title, and a document with neither is one slide. Level 1 is the document
 //! title everywhere else in this crate, which is the same rule seen from the
