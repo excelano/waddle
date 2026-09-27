@@ -44,7 +44,4 @@ that reads back one level deeper than it went in is this rule broken. **Never ov
 the binary numbers a taken name and the library writes nothing to disk at all. **Warnings
 are not failures**: a run that dropped a furniture-layer paragraph exits 0 and says so on
 stderr, and `--strict` is the caller asking for refusal. Exit codes are the fleet's, 0, 1
-for bad input, 2 for a bad command line (`~/notes/agent_cli_conventions.md`). Every source
-file header carries `Author: David M. Anderson` and `Built with AI assistance (Claude,
-Anthropic)`; commits carry a `Co-Authored-By` for the model and a `Signed-off-by` for
-David, and no session URL.
+for bad input, 2 for a bad command line (`~/notes/agent_cli_conventions.md`).
