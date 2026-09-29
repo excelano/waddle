@@ -24,7 +24,7 @@ Writer by hand. `WADDLE_CORPUS_WRITER=1` opens every corpus package in headless 
 second per document. The round-trip corpus is `crates/docling/tests/data/<format>/sources/`
 in a checkout of docling.rs, which moves several times a week, so pull before reading it;
 where that checkout lives is a fact about a machine and is not written down here. The build
-directory is the shared one in `~/.cargo/config.toml`. Releases: run `ship waddle`.
+directory is the shared one in `~/.cargo/config.toml`. Releases: the apps in excelano/shipping, run from this directory.
 
 ## Rules
 
