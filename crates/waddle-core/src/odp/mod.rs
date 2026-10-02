@@ -121,7 +121,9 @@ impl Writer {
                     node,
                     Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
                 ),
+                Node::PictureChildren(_) => {}
                 Node::CommentSection { .. }
+                | Node::KeyValueGraph { .. }
                 | Node::PageFurniture { .. }
                 | Node::PageInfo { .. } => self.warn(node, Reason::Unsupported),
                 Node::Heading { .. }
@@ -239,6 +241,8 @@ impl Writer {
             | Node::Furniture { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
         }
     }
@@ -331,6 +335,8 @@ impl Writer {
             | Node::Furniture { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
         }
     }
@@ -399,6 +405,8 @@ impl Writer {
             | Node::Furniture { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
         }
     }
@@ -567,6 +575,8 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::Furniture { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {
                 if slides.is_empty() {
                     slides.push(Slide::default());
@@ -604,6 +614,8 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::Furniture { .. }
         | Node::CommentSection { .. }
         | Node::PageFurniture { .. }
+        | Node::KeyValueGraph { .. }
+        | Node::PictureChildren(_)
         | Node::PageInfo { .. } => false,
     }
 }

@@ -138,8 +138,10 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::Formula { .. }
             | Node::Caption { .. }
             | Node::FieldRegion { .. }
+            | Node::KeyValueGraph { .. }
             | Node::InlineGroup { .. }
             | Node::CommentSection { .. }
+            | Node::PictureChildren(_)
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }

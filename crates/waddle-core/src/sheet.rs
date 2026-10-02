@@ -130,6 +130,8 @@ impl Walk {
             | Node::InlineGroup { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageBreak
             | Node::PageInfo { .. }
             | Node::TextDump(_) => self.warn(node, Reason::Unsupported),

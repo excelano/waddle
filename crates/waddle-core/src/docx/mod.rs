@@ -314,10 +314,12 @@ impl Writer {
             Node::PageBreak => self
                 .body
                 .push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n"),
-            Node::PageInfo { .. } => {}
-            Node::CommentSection { .. } | Node::PageFurniture { .. } => {
-                self.warn(node, Reason::Unsupported)
-            }
+            // Page geometry has no content to carry and is not worth a warning,
+            // and the text inside a picture is JSON-only in every other serializer.
+            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
+            Node::CommentSection { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
         }
     }
 

@@ -326,11 +326,12 @@ impl Writer {
             | Node::DoclangOnly(inner) => self.node(inner),
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
             Node::PageBreak => self.body.push_str("<text:p text:style-name=\"Pbreak\"/>\n"),
-            // Page geometry has no content to carry and is not worth a warning.
-            Node::PageInfo { .. } => {}
-            Node::CommentSection { .. } | Node::PageFurniture { .. } => {
-                self.warn(node, Reason::Unsupported)
-            }
+            // Page geometry has no content to carry and is not worth a warning,
+            // and the text inside a picture is JSON-only in every other serializer.
+            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
+            Node::CommentSection { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
         }
     }
 
@@ -698,6 +699,28 @@ mod tests {
             ]
         );
         assert!(!writer.body.contains("running head"));
+    }
+
+    #[test]
+    fn a_key_value_graph_warns_and_a_pictures_text_is_dropped_quietly() {
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::KeyValueGraph {
+            cells: Vec::new(),
+            links: Vec::new(),
+        });
+        doc.push(Node::PictureChildren(vec![Node::Paragraph {
+            text: "inside the picture".into(),
+        }]));
+        let mut writer = Writer::default();
+        writer.nodes(&doc.nodes);
+        assert_eq!(
+            writer.warnings,
+            vec![Warning {
+                node: "key_value_graph",
+                reason: Reason::Unsupported
+            }]
+        );
+        assert!(!writer.body.contains("inside the picture"));
     }
 
     #[test]

@@ -239,6 +239,8 @@ level 1 would read back one level deeper than it went in.
 | Group | transparent, unless its layer is furniture, notes or invisible, in which case it and its children are dropped |
 | Located, Prov, Commented, DoclangOnly | the inner node |
 | Furniture, PageFurniture, CommentSection, PageInfo | dropped |
+| KeyValueGraph | dropped with a warning; only docling's JSON carries the graph and no office format has a construct for it |
+| PictureChildren | dropped without a warning; the text inside a PDF picture is JSON-only in every serializer docling.rs has, and the picture itself is written |
 
 ### DOCX
 
@@ -466,7 +468,12 @@ code block, so a paragraph that is one inline code span returns as code.
 The reader's relationship parser leaves an entity in a link target
 undecoded, so the scanner decodes the entities docling writes into a
 destination and writes the character; the file is right and the second
-trip is equal. Header rows beyond the first are lost as in ODT.
+trip is equal. A hyperlink to a bare fragment, `#section-2`, loses its target,
+because the reader drops a relationship whose target starts with `#` before
+it reads the package, as docling 2.128 does, and it reads no `w:anchor`; the
+link comes back as its text, and the corpus test compares a DOCX trip with
+fragment-only link destinations removed from the source. Header rows beyond
+the first are lost as in ODT.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return, and reviewer comments are in that set.

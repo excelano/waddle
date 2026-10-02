@@ -175,6 +175,8 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
             | Node::Furniture { .. }
             | Node::PageFurniture { .. }
             | Node::CommentSection { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
             // No text of its own.
             Node::PageBreak => {}
@@ -200,6 +202,26 @@ const SPARSE_IN_A_SHEET: &[&str] = &[
 /// Whether this document's tables are among the ones a sheet cannot hold.
 fn sparse_in_a_sheet(target: Target, name: &str) -> bool {
     target == Target::Ods && SPARSE_IN_A_SHEET.contains(&name)
+}
+
+/// A source piece as the target's reader can return it. The DOCX reader drops
+/// a hyperlink relationship whose target is a bare fragment, as docling 2.128
+/// does, so an internal link comes back as its text alone. DESIGN.md §6.
+fn as_the_reader_returns(target: Target, piece: &str) -> String {
+    if target != Target::Docx {
+        return piece.to_string();
+    }
+    let mut out = String::new();
+    let mut rest = piece;
+    while let Some(at) = rest.find("](#") {
+        out.push_str(&rest[..=at]);
+        match rest[at..].find(')') {
+            Some(close) => rest = &rest[at + close + 1..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// ODS is a spreadsheet: it writes the tabular nodes and reports every other
@@ -269,6 +291,8 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::KeyValueGraph { .. }
+            | Node::PictureChildren(_)
             | Node::TextDump(_) => 0,
         })
         .sum()
@@ -352,7 +376,7 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     let missing: Vec<&String> = pieces
         .iter()
         .filter(|p| {
-            let w = words(p);
+            let w = words(&as_the_reader_returns(target, p));
             !w.is_empty() && !haystack.contains(&w)
         })
         .collect();
