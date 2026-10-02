@@ -1,6 +1,6 @@
-# waddle — DoclingDocument to ODT and DOCX
+# waddle — DoclingDocument to office documents
 
-waddle writes an office document from a docling `DoclingDocument`. DocLang, a DocLang archive or docling JSON goes in; an OpenDocument Text or Word package comes out, offline, in pure Rust, with nothing overwritten. [docling.rs](https://github.com/docling-project/docling.rs) reads Word, PowerPoint, Excel, PDF, HTML and some forty other formats into that model and writes Markdown, JSON, DocLang and LaTeX from it. It writes no office format. waddle is the missing direction.
+waddle writes an office document from a docling `DoclingDocument`. DocLang, a DocLang archive or docling JSON goes in; an OpenDocument or Office Open XML package comes out (ODT, DOCX, ODS, ODP or XLSX), offline, in pure Rust, with nothing overwritten. [docling.rs](https://github.com/docling-project/docling.rs) reads Word, PowerPoint, Excel, PDF, HTML and some forty other formats into that model and writes Markdown, JSON, DocLang and LaTeX from it. It writes no office format. waddle is the missing direction.
 
 ```text
 $ waddle report.dclg --to odt

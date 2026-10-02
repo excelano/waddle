@@ -96,5 +96,5 @@ for warning in &out.warnings { eprintln!("{warning}"); }
 
 `waddle_core` re-exports `docling_core`, so a caller uses the model version the crate was
 built against. `Output { bytes, warnings }`; `Warning { node, reason }` with
-`Reason::{Layer(&str), Unsupported, Placeholder}`; `Target::{Odt, Docx}` with
+`Reason::{Layer(&str), Unsupported, Placeholder}`; `Target::{Odt, Docx, Ods, Odp, Xlsx}` with
 `extension()` and `media_type()`.

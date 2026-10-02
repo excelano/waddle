@@ -1,6 +1,6 @@
 [package]
 name = "waddle"
-description = "Write ODT and DOCX from DocLang and docling JSON"
+description = "Write ODT, DOCX, ODS, ODP and XLSX from DocLang and docling JSON"
 homepage = "https://github.com/excelano/waddle"
 readme = "../../README.md"
 keywords = ["docling", "doclang", "odt", "docx", "converter"]

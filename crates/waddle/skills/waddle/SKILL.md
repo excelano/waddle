@@ -1,18 +1,19 @@
 ---
 name: waddle
 description: >-
-  Write an ODT or DOCX from a document docling.rs has already read, with `waddle`. Match on
-  the situation rather than the verb: "turn this DocLang back into Word", "I have docling
+  Write an ODT, DOCX, ODS, ODP or XLSX from a document docling.rs has already read, with
+  `waddle`. Match on the situation rather than the verb: "turn this DocLang back into Word", "I have docling
   JSON and need a .docx", "Duckling gave me a .dclg, I need something I can send", "get this
   into LibreOffice", "convert the docling output to an office document". Input is bare
   DocLang (`.dclg`), a DocLang archive (`.dclx`) or docling's JSON export; output is one
-  OpenDocument Text or Word package, plain and well structured, never overwriting a file.
+  OpenDocument or Office Open XML package (ODT, DOCX, ODS, ODP or XLSX), plain and well
+  structured, never overwriting a file.
   Not for reading office documents into a model (docling.rs, or Duckling on the desktop),
   not for editing an existing .docx, and not for reproducing how a source document looked:
   the model carries no styles or layout, and waddle writes a stock look on purpose.
 ---
 
-# waddle — a DoclingDocument to ODT or DOCX
+# waddle — a DoclingDocument to an office package
 
 `waddle` takes what docling.rs produced and writes an office package from it. docling.rs
 reads Word, PowerPoint, Excel, PDF, HTML and some forty other formats into a
