@@ -18,7 +18,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, DoclingDocument, Node, PictureImage, Table};
+use docling_core::{CaptionParent, ContentLayer, DoclingDocument, Node, PictureImage, Table};
 
 use crate::Error;
 use crate::inline::{self, Run};
@@ -115,8 +115,12 @@ impl Writer {
                 Node::Located { inner, .. }
                 | Node::Prov { inner, .. }
                 | Node::Commented { inner, .. }
+                | Node::Track { inner, .. }
                 | Node::DoclangOnly(inner) => self.flatten(std::slice::from_ref(inner), out),
                 Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
+                Node::FurnitureText { .. } => {
+                    self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
+                }
                 Node::Group { layer, .. } => self.warn(
                     node,
                     Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
@@ -133,6 +137,7 @@ impl Writer {
                 | Node::Code { .. }
                 | Node::Formula { .. }
                 | Node::Caption { .. }
+                | Node::LabeledText { .. }
                 | Node::FieldRegion { .. }
                 | Node::InlineGroup { .. }
                 | Node::TextDump(_)
@@ -230,6 +235,7 @@ impl Writer {
             | Node::Code { .. }
             | Node::Formula { .. }
             | Node::Caption { .. }
+            | Node::LabeledText { .. }
             | Node::InlineGroup { .. }
             | Node::TextDump(_)
             | Node::PageBreak
@@ -237,8 +243,10 @@ impl Writer {
             | Node::Located { .. }
             | Node::Prov { .. }
             | Node::Commented { .. }
+            | Node::Track { .. }
             | Node::DoclangOnly(_)
             | Node::Furniture { .. }
+            | Node::FurnitureText { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
@@ -314,6 +322,7 @@ impl Writer {
                     cell_blocks: None,
                     caption: None,
                     caption_parent: CaptionParent::Body,
+                    caption_location: None,
                     cells: None,
                 });
             }
@@ -324,6 +333,7 @@ impl Writer {
             | Node::Code { .. }
             | Node::Formula { .. }
             | Node::Caption { .. }
+            | Node::LabeledText { .. }
             | Node::InlineGroup { .. }
             | Node::TextDump(_)
             | Node::PageBreak
@@ -331,8 +341,10 @@ impl Writer {
             | Node::Located { .. }
             | Node::Prov { .. }
             | Node::Commented { .. }
+            | Node::Track { .. }
             | Node::DoclangOnly(_)
             | Node::Furniture { .. }
+            | Node::FurnitureText { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
@@ -356,7 +368,9 @@ impl Writer {
                 self.body.push_str("</text:h>\n");
             }
             Node::Paragraph { text } => self.paragraph(&inline::from_markdown(text)),
-            Node::InlineGroup { md_text, .. } => self.paragraph(&inline::from_markdown(md_text)),
+            Node::InlineGroup { runs, md_text, .. } => {
+                self.paragraph(&inline::from_group(md_text, runs))
+            }
             Node::CheckboxItem { checked, text } => {
                 let mark = if *checked { "[x] " } else { "[ ] " };
                 let mut runs = vec![inline::plain(mark)];
@@ -382,6 +396,7 @@ impl Writer {
                 let source = if latex.is_empty() { orig } else { latex };
                 self.paragraph(&[inline::plain(source)]);
             }
+            Node::LabeledText { .. } => self.text_node(&node.labeled_as_paragraph()),
             Node::Caption { text, href } => {
                 self.paragraph(&inline::caption_runs(text, href.as_deref()));
             }
@@ -401,8 +416,10 @@ impl Writer {
             | Node::Located { .. }
             | Node::Prov { .. }
             | Node::Commented { .. }
+            | Node::Track { .. }
             | Node::DoclangOnly(_)
             | Node::Furniture { .. }
+            | Node::FurnitureText { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
@@ -561,6 +578,7 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::Code { .. }
             | Node::Formula { .. }
             | Node::Caption { .. }
+            | Node::LabeledText { .. }
             | Node::FieldRegion { .. }
             | Node::InlineGroup { .. }
             | Node::TextDump(_)
@@ -571,8 +589,10 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::Located { .. }
             | Node::Prov { .. }
             | Node::Commented { .. }
+            | Node::Track { .. }
             | Node::DoclangOnly(_)
             | Node::Furniture { .. }
+            | Node::FurnitureText { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
@@ -603,6 +623,7 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::Code { .. }
         | Node::Formula { .. }
         | Node::Caption { .. }
+        | Node::LabeledText { .. }
         | Node::InlineGroup { .. }
         | Node::TextDump(_)
         | Node::PageBreak
@@ -610,8 +631,10 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::Located { .. }
         | Node::Prov { .. }
         | Node::Commented { .. }
+        | Node::Track { .. }
         | Node::DoclangOnly(_)
         | Node::Furniture { .. }
+        | Node::FurnitureText { .. }
         | Node::CommentSection { .. }
         | Node::PageFurniture { .. }
         | Node::KeyValueGraph { .. }
@@ -682,6 +705,7 @@ mod tests {
             cell_blocks: None,
             caption: Some("Table 1".into()),
             caption_parent: CaptionParent::Body,
+            caption_location: None,
             cells: None,
         }));
         let xml = content_of(&doc);

@@ -218,6 +218,17 @@ fn scan(chars: &[char], style: &Run, out: &mut Vec<Run>) {
             i = end + 1;
             continue;
         }
+        // An image reference the reader left unresolved, which the readers
+        // keep as paragraph text: kept as written rather than read as a `!`
+        // before a link.
+        if c == '!'
+            && chars.get(i + 1) == Some(&'[')
+            && let Some((_, dest_end)) = link_at(chars, i + 1)
+        {
+            plain.extend(&chars[i..=dest_end]);
+            i = dest_end + 1;
+            continue;
+        }
         if c == '['
             && let Some((anchor_end, dest_end)) = link_at(chars, i)
         {
@@ -465,6 +476,21 @@ mod tests {
                 Run {
                     bold: true,
                     ..plain(" end")
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn an_image_reference_is_its_text_and_a_link_beside_it_is_a_link() {
+        let runs = from_markdown("![a *box*](img/x.png) and ![x] or [y](z)");
+        assert_eq!(
+            runs,
+            vec![
+                plain("![a *box*](img/x.png) and ![x] or "),
+                Run {
+                    href: Some("z".into()),
+                    ..plain("y")
                 },
             ]
         );

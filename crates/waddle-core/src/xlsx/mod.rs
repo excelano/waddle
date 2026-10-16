@@ -207,6 +207,7 @@ mod tests {
             cell_blocks: None,
             caption: caption.map(String::from),
             caption_parent: CaptionParent::Body,
+            caption_location: None,
             cells: None,
         }
     }

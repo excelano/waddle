@@ -10,7 +10,9 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, DoclingDocument, Node, PictureImage, Table};
+use docling_core::{
+    CaptionParent, ContentLayer, DoclingDocument, Node, PictureDescription, PictureImage, Table,
+};
 
 use crate::Error;
 use crate::inline::{
@@ -250,8 +252,22 @@ impl Writer {
                 caption,
                 caption_href,
                 image,
+                description,
                 ..
-            } => self.picture(caption.as_deref(), caption_href.as_deref(), image.as_ref()),
+            } => {
+                // Only an author's alt text: a description some enrichment
+                // wrote would come back claiming to be one.
+                let alt = description
+                    .as_ref()
+                    .filter(|d| d.provenance == PictureDescription::ALT_TEXT)
+                    .map(|d| d.text.as_str());
+                self.picture(
+                    caption.as_deref(),
+                    caption_href.as_deref(),
+                    image.as_ref(),
+                    alt,
+                )
+            }
             Node::Formula { latex, orig, .. } => {
                 let source = if latex.is_empty() { orig } else { latex };
                 self.paragraph(Some("SourceCode"), &[plain(source)], false);
@@ -261,13 +277,16 @@ impl Writer {
             // Caption style is the one this writer already gives a table's or
             // picture's caption; the hyperlink annotation covers the whole
             // text, as it does in docling's Markdown.
+            // The paragraph docling's own serializers render it as; the label does not
+            // survive, since neither reader produces one.
+            Node::LabeledText { .. } => self.node(&node.labeled_as_paragraph()),
             Node::Caption { text, href } => {
                 self.paragraph(Some("Caption"), &caption_runs(text, href.as_deref()), false);
             }
             Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
                 self.table(table, caption.as_deref())
             }
-            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None, None),
+            Node::Chart { caption, .. } => self.picture(caption.as_deref(), None, None, None),
             Node::FieldRegion { items } => {
                 let rows = items
                     .iter()
@@ -288,6 +307,7 @@ impl Writer {
                         // No caption to hang, so the field is the default
                         // every declarative backend leaves alone.
                         caption_parent: CaptionParent::Body,
+                        caption_location: None,
                         cells: None,
                     },
                     None,
@@ -306,11 +326,20 @@ impl Writer {
                 children,
                 ..
             } => self.nodes(children),
+            // The empty text the reader leaves after a table for each
+            // multi-run paragraph in its cells, and makes again from the
+            // table; written, it would come back as a blank paragraph.
+            Node::DoclangOnly(inner) if matches!(inner.as_ref(), Node::Paragraph { text } if text.is_empty()) =>
+                {}
             Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
+            | Node::Track { inner, .. }
             | Node::DoclangOnly(inner) => self.node(inner),
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
+            Node::FurnitureText { .. } => {
+                self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
+            }
             Node::PageBreak => self
                 .body
                 .push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n"),
@@ -499,6 +528,7 @@ impl Writer {
         caption: Option<&str>,
         caption_href: Option<&str>,
         image: Option<&PictureImage>,
+        alt: Option<&str>,
     ) {
         if let Some(caption) = caption {
             self.paragraph(Some("Caption"), &caption_runs(caption, caption_href), false);
@@ -530,8 +560,9 @@ impl Writer {
         let rid = rel_id(self.rels.len() - 1);
         let cx = (width_in * EMU_PER_INCH) as u64;
         let cy = (height_in * EMU_PER_INCH) as u64;
+        let descr = alt.map_or(String::new(), |a| format!(" descr=\"{}\"", xml::attr(a)));
         self.body.push_str(&format!(
-            "<w:p><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{index}\" name=\"Picture {index}\"/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"{index}\" name=\"image{index}.{extension}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\"{rid}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\n"
+            "<w:p><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{index}\" name=\"Picture {index}\"{descr}/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"{index}\" name=\"image{index}.{extension}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\"{rid}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\n"
         ));
     }
 
@@ -678,7 +709,9 @@ mod tests {
             caption_href: Some("https://a.org/rig".into()),
             image: None,
             classification: None,
+            description: None,
             caption_parent: CaptionParent::Body,
+            caption_location: None,
         });
         let mut writer = Writer::default();
         writer.nodes(&doc.nodes);
@@ -793,6 +826,7 @@ mod tests {
             cell_blocks: None,
             caption: None,
             caption_parent: CaptionParent::Body,
+            caption_location: None,
             cells: None,
         }));
         let body = body_of(&doc);
@@ -815,7 +849,9 @@ mod tests {
             caption_href: None,
             image: None,
             classification: None,
+            description: None,
             caption_parent: CaptionParent::Body,
+            caption_location: None,
         });
         let mut writer = Writer::default();
         writer.nodes(&doc.nodes);

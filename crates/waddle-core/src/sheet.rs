@@ -11,7 +11,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{Node, Table};
+use docling_core::{ContentLayer, Node, Table};
 
 use crate::report::{Reason, Warning};
 
@@ -110,8 +110,12 @@ impl Walk {
             Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
+            | Node::Track { inner, .. }
             | Node::DoclangOnly(inner) => self.node(inner),
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
+            Node::FurnitureText { .. } => {
+                self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
+            }
             Node::Group { layer, .. } => self.warn(
                 node,
                 Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
@@ -126,6 +130,7 @@ impl Walk {
             | Node::Picture { .. }
             | Node::Formula { .. }
             | Node::Caption { .. }
+            | Node::LabeledText { .. }
             | Node::Chart { .. }
             | Node::InlineGroup { .. }
             | Node::CommentSection { .. }

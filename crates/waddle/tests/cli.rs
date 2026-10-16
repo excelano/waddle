@@ -64,9 +64,12 @@ fn document() -> DoclingDocument {
             width: 16,
             height: 12,
             data: PNG.to_vec(),
+            dpi: PictureImage::DEFAULT_DPI,
         }),
         classification: None,
+        description: None,
         caption_parent: CaptionParent::Body,
+        caption_location: None,
     });
     doc
 }
