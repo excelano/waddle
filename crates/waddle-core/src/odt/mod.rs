@@ -9,7 +9,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, DoclingDocument, Node, PictureImage, Table};
+use docling_core::{CaptionParent, ContentLayer, DoclingDocument, Node, PictureImage, Table};
 
 use crate::inline::{
     self, Position, Run, caption_runs, collapse_spaces, is_blank, merge_adjacent, outside_links,
@@ -274,6 +274,9 @@ impl Writer {
             // Caption style is the one this writer already gives a table's or
             // picture's caption; the hyperlink annotation covers the whole
             // text, as it does in docling's Markdown.
+            // The paragraph docling's own serializers render it as; the label does not
+            // survive, since neither reader produces one.
+            Node::LabeledText { .. } => self.node(&node.labeled_as_paragraph()),
             Node::Caption { text, href } => {
                 self.paragraph("Caption", &caption_runs(text, href.as_deref()));
             }
@@ -302,6 +305,7 @@ impl Writer {
                         // No caption to hang, so the field is the default
                         // every declarative backend leaves alone.
                         caption_parent: CaptionParent::Body,
+                        caption_location: None,
                         cells: None,
                     },
                     None,
@@ -323,8 +327,12 @@ impl Writer {
             Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
+            | Node::Track { inner, .. }
             | Node::DoclangOnly(inner) => self.node(inner),
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
+            Node::FurnitureText { .. } => {
+                self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
+            }
             Node::PageBreak => self.body.push_str("<text:p text:style-name=\"Pbreak\"/>\n"),
             // Page geometry has no content to carry and is not worth a warning,
             // and the text inside a picture is JSON-only in every other serializer.
@@ -742,6 +750,7 @@ mod tests {
             cell_blocks: None,
             caption: Some("Table 1: things".into()),
             caption_parent: CaptionParent::Body,
+            caption_location: None,
             cells: None,
         }));
         let xml = content_of(&doc);
@@ -761,7 +770,9 @@ mod tests {
             caption_href: Some("https://a.org/rig".into()),
             image: None,
             classification: None,
+            description: None,
             caption_parent: CaptionParent::Body,
+            caption_location: None,
         });
         let xml = content_of(&doc);
         assert!(xml.contains(r#"<text:p text:style-name="Caption">"#));
@@ -777,7 +788,9 @@ mod tests {
             caption_href: None,
             image: None,
             classification: None,
+            description: None,
             caption_parent: CaptionParent::Body,
+            caption_location: None,
         });
         let mut writer = Writer::default();
         writer.nodes(&doc.nodes);

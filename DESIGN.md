@@ -55,13 +55,14 @@ dependency is what would make the capability cheap for upstream to accept.
 `DoclingDocument` (`crates/docling-core/src/document.rs`) is a struct with a
 public `nodes: Vec<Node>` and a handful of document-level fields: name, two
 Markdown flags, a `links` list only the PDF pipeline fills, and an optional
-confidence report. `Node` is an enum of twenty-six variants. The ones that
+confidence report. `Node` is an enum of twenty-eight variants. The ones that
 carry content are heading with a level, paragraph, checkbox item, list item
 with ordering, level, number and marker, code with an optional language,
-table, picture with an optional caption and optional bytes, formula, chart,
-group, form field region, inline group, text dump, page furniture, page
-break and page info. The rest are wrappers: furniture, located, commented,
-comment section and DocLang-only, each holding an inner node or an index.
+table, picture with an optional caption, optional bytes and an optional
+description, formula, chart, caption, labelled text, group, form field region,
+inline group, text dump, page furniture, furniture text, page break and page
+info. The rest are wrappers: furniture, located, commented, track, comment
+section and DocLang-only, each holding an inner node or an index.
 
 The model is semantic and flat. It carries no styles, page geometry,
 numbering definitions, themes, sections, fonts, or headers and footers as
@@ -182,7 +183,10 @@ and a parser reads block structure, raw HTML and entities into it. So
 `inline.rs` is a scanner of the dialect docling emits and nothing more: `***`, `**`, `*`, `~~`, backticks,
 `[text](url)`, backslash escapes and the HTML entities docling writes for
 `&`, `<` and `>`, with CommonMark's rule that a marker opens against
-non-space and closes after it, so that `2 * 3 ** 4` stays arithmetic.
+non-space and closes after it, so that `2 * 3 ** 4` stays arithmetic. An
+image reference, `![alt](src)`, is one the reader could not resolve and left in
+the paragraph as text, so it is written as that text rather than as a `!`
+before a link.
 
 A node that carries structured runs also carries the Markdown docling built
 from them, and each side knows something the other does not. The runs have
@@ -233,12 +237,13 @@ level 1 would read back one level deeper than it went in.
 | Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; MathML is a later release |
 | Caption | a standalone caption, one no picture or table claimed: a `text:p` in the `Caption` style, the caption's hyperlink annotation applied to every run that carries no link of its own, which is the link docling's Markdown wraps the whole caption in; an empty one is no paragraph, as it is no line in Markdown |
+| LabeledText | the paragraph docling-core's `labeled_as_paragraph` makes of it, `[text](uri)` when it carries a link; the label, a PDF footnote's, does not return, since neither reader assigns one |
 | FieldRegion | a two-column table of key and value |
 | TextDump | paragraphs split on blank lines |
 | PageBreak | an empty `text:p` in an automatic style with `fo:break-before="page"`; the reader drops an empty paragraph, so a break does not return |
 | Group | transparent, unless its layer is furniture, notes or invisible, in which case it and its children are dropped |
-| Located, Prov, Commented, DoclangOnly | the inner node |
-| Furniture, PageFurniture, CommentSection, PageInfo | dropped |
+| Located, Prov, Commented, Track, DoclangOnly | the inner node |
+| Furniture, FurnitureText, PageFurniture, CommentSection, PageInfo | dropped |
 | KeyValueGraph | dropped with a warning; only docling's JSON carries the graph and no office format has a construct for it |
 | PictureChildren | dropped without a warning; the text inside a PDF picture is JSON-only in every serializer docling.rs has, and the picture itself is written |
 
@@ -256,8 +261,8 @@ not repeated.
 | CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
 | Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
-| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG |
-| Chart, Formula, Caption, FieldRegion, TextDump, Group and the wrappers | as for ODT |
+| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
+| Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
 
 Style names avoid `heading`, `title` and `code` except where they mean it:
@@ -287,7 +292,7 @@ numeric suffix.
 | Table | one sheet, a plain rectangular grid of `table:table-cell` in `office:value-type="string"`; short rows padded to the widest, because a ragged row leaves a hole the reader parts on; the leading header rows in a bold cell style, for the reader's sake rather than the round trip's |
 | Chart | with data, its table as a sheet; without, dropped and reported |
 | FieldRegion | a sheet of its keys and values, as it is a table in every other target |
-| Group, Located, Prov, Commented, DoclangOnly | transparent, as elsewhere |
+| Group, Located, Prov, Commented, Track, DoclangOnly | transparent, as elsewhere |
 | Everything else | dropped and reported: a spreadsheet has no cell for a heading, a paragraph, a list item, a picture, a formula or a page break |
 
 Spans are deliberately not written. The reader returns every table with
@@ -337,12 +342,12 @@ document has one, and a document that is a deck has one per slide.
 |---|---|
 | Heading, level 1 | the slide, and a `draw:frame` with `presentation:class="title"` holding its text |
 | Heading, level 2 and deeper | `text:h` in the slide's text box at one outline level shallower, the inverse of the reader |
-| Paragraph, InlineGroup, CheckboxItem, Code, Formula, Caption, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
+| Paragraph, InlineGroup, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
 | ListItem | `text:list`, which `add_odf_list` reads back; the stock marker style means an ordered list returns unordered |
 | Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it |
 | Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the grey PNG |
 | PageBreak | the slide boundary, and no element of its own |
-| Group, Located, Prov, Commented, DoclangOnly | transparent, resolved before the split so a wrapper cannot become a slide boundary |
+| Group, Located, Prov, Commented, Track, DoclangOnly | transparent, resolved before the split so a wrapper cannot become a slide boundary |
 
 Text and blocks cannot share a frame: the reader takes a frame's tables and
 images from its *descendants* and its text from a `draw:text-box`, so a table
@@ -473,7 +478,11 @@ because the reader drops a relationship whose target starts with `#` before
 it reads the package, as docling 2.128 does, and it reads no `w:anchor`; the
 link comes back as its text, and the corpus test compares a DOCX trip with
 fragment-only link destinations removed from the source. Header rows beyond
-the first are lost as in ODT.
+the first are lost as in ODT. A multi-run paragraph in a rich cell returns
+as one cell block per run, and the reader leaves an empty DocLang-only text
+after the table for each such paragraph; written again, the blocks are
+single-run paragraphs and the second trip carries no such text. Every cell is
+the same on both trips, and the corpus test names the document this bites.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return, and reviewer comments are in that set.

@@ -120,6 +120,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
+            | Node::Track { inner, .. }
             | Node::DoclangOnly(inner) => collect(std::slice::from_mut(&mut **inner), out),
             Node::Table(table) => {
                 if let Some(blocks) = &mut table.cell_blocks {
@@ -137,6 +138,8 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::Code { .. }
             | Node::Formula { .. }
             | Node::Caption { .. }
+            | Node::LabeledText { .. }
+            | Node::FurnitureText { .. }
             | Node::FieldRegion { .. }
             | Node::KeyValueGraph { .. }
             | Node::InlineGroup { .. }
@@ -189,6 +192,7 @@ fn load(uri: &str, input: &Input) -> Result<PictureImage, String> {
         width,
         height,
         data: bytes,
+        dpi: PictureImage::DEFAULT_DPI,
     })
 }
 

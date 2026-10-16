@@ -34,6 +34,11 @@ jobs:
     name: Newest docling-core
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # `bash` named is `-eo pipefail`; left implicit it is `-e` alone, and the
+    # `| tee` below then reports tee's success for a build that failed.
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v7

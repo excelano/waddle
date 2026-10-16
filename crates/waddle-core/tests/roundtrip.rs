@@ -19,7 +19,8 @@ use std::process::Command;
 
 use docling::{DocumentConverter, InputFormat, SourceDocument};
 use docling_core::{
-    CaptionParent, DoclingDocument, InlineRun, Node, Script, inline_paragraph_node,
+    CaptionParent, DoclingDocument, InlineRun, Node, PictureDescription, Script,
+    inline_paragraph_node,
 };
 use waddle_core::{Output, Target, docx, odp, ods, odt, xlsx};
 
@@ -290,6 +291,83 @@ fn wrappers_are_transparent_and_layers_are_dropped() {
     assert_eq!(out.warnings[0].node, "furniture");
 }
 
+/// The variants docling-core 2 added: a track cue is the node it wraps, a
+/// labelled text is the paragraph docling's Markdown spells, and a furniture
+/// text is dropped with its layer like any other furniture.
+#[test]
+fn a_track_a_labelled_text_and_a_furniture_text_follow_docling() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Track {
+        track: docling_core::tree::TreeTrack {
+            start_time: 0.0,
+            end_time: 1.5,
+            identifier: None,
+            voice: None,
+        },
+        cue: "a cue".into(),
+        inner: Box::new(Node::Paragraph {
+            text: "a cue".into(),
+        }),
+    });
+    doc.push(Node::LabeledText {
+        label: "footnote".into(),
+        text: "a note".into(),
+        href: Some("https://a.org/note".into()),
+    });
+    doc.push(Node::FurnitureText {
+        label: "page_footer".into(),
+        text: "page 1".into(),
+    });
+    for target in [Target::Odt, Target::Docx] {
+        let (back, out) = trip(target, &doc);
+        assert_eq!(
+            back.export_to_markdown(),
+            "a cue\n\n[a note](https://a.org/note)\n",
+            "{target:?}"
+        );
+        assert_eq!(out.warnings.len(), 1, "{target:?}: {:?}", out.warnings);
+        assert_eq!(out.warnings[0].node, "furniture_text");
+        assert_fixed_point_for(target, &back);
+    }
+}
+
+/// An author's alt text is the `descr` the DOCX reader reads it from; a
+/// description with any other provenance is not written as one.
+#[test]
+fn docx_keeps_a_pictures_alt_text_and_only_that() {
+    let picture = |description| Node::Picture {
+        caption: None,
+        caption_href: None,
+        image: None,
+        classification: None,
+        description,
+        caption_parent: CaptionParent::Body,
+        caption_location: None,
+    };
+    let mut doc = DoclingDocument::new("t");
+    doc.push(picture(Some(PictureDescription::alt_text("a grey box"))));
+    doc.push(picture(Some(PictureDescription {
+        text: "read off the pixels".into(),
+        provenance: "ocr".into(),
+    })));
+    let (back, _) = docx_trip(&doc);
+    let descriptions: Vec<Option<PictureDescription>> = back
+        .nodes
+        .iter()
+        .map(|node| match node {
+            Node::Picture { description, .. } => description.clone(),
+            other => panic!(
+                "{} where a picture was written",
+                waddle_core::node::kind(other)
+            ),
+        })
+        .collect();
+    assert_eq!(
+        descriptions,
+        vec![Some(PictureDescription::alt_text("a grey box")), None]
+    );
+}
+
 fn list_item(ordered: bool, number: u64, first: bool, level: u8, text: &str) -> Node {
     Node::ListItem {
         ordered,
@@ -387,6 +465,7 @@ fn a_table_keeps_its_grid_spans_and_caption_text() {
         cell_blocks: None,
         caption: Some("Table 1: quarters".into()),
         caption_parent: CaptionParent::Body,
+        caption_location: None,
         cells: None,
     }));
     let (back, out) = odt_trip(&doc);
@@ -424,7 +503,9 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
         caption_href: None,
         image: None,
         classification: None,
+        description: None,
         caption_parent: CaptionParent::Body,
+        caption_location: None,
     });
     // The placeholder the writer embeds is a valid PNG; take it from the
     // writer's own output to serve as real bytes for the second picture.
@@ -444,9 +525,12 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
             width: 16,
             height: 12,
             data: png,
+            dpi: docling_core::PictureImage::DEFAULT_DPI,
         }),
         classification: None,
+        description: None,
         caption_parent: CaptionParent::Body,
+        caption_location: None,
     });
     doc.add_paragraph("after");
     let (back, out) = odt_trip(&doc);
@@ -667,6 +751,7 @@ fn docx_tables_pictures_code_and_checkboxes() {
         cell_blocks: None,
         caption: Some("Table 1: quarters".into()),
         caption_parent: CaptionParent::Body,
+        caption_location: None,
         cells: None,
     }));
     doc.push(Node::Picture {
@@ -674,7 +759,9 @@ fn docx_tables_pictures_code_and_checkboxes() {
         caption_href: None,
         image: None,
         classification: None,
+        description: None,
         caption_parent: CaptionParent::Body,
+        caption_location: None,
     });
     doc.push(Node::Code {
         language: None,
@@ -751,6 +838,7 @@ fn ods_tables_come_back_as_tables_and_prose_is_reported() {
         cell_blocks: None,
         caption: Some("Table 1: quarters".into()),
         caption_parent: CaptionParent::Body,
+        caption_location: None,
         cells: None,
     }));
     let (back, out) = ods_trip(&doc);
@@ -793,6 +881,7 @@ fn ods_splits_a_table_on_a_blank_row() {
         cell_blocks: None,
         caption: None,
         caption_parent: CaptionParent::Body,
+        caption_location: None,
         cells: None,
     }));
     let (back, _) = ods_trip(&doc);
