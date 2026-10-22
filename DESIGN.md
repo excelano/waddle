@@ -128,10 +128,17 @@ changed the document model inside a minor release: between 1.35 and 1.36 the
 any exhaustive match. Two rules follow. The writers match `Node` exhaustively
 with no wildcard arm, so a new variant or field upstream fails the build here
 rather than being dropped silently, and the compile error is the notification.
-And `ci.yml` carries a weekly job that runs `cargo update -p docling-core`
-before building and opens an issue when that build breaks; it does not run on a
-push, because a push cannot change what upstream released. Dependabot's pass
-covers the lockfile. The pin only moves forward.
+And `ci.yml` carries a weekly job that lifts both docling requirements to
+the newest 2.x release and runs `cargo update -p docling -p docling-core`
+before building, then opens an issue when that build breaks; it does not run
+on a push, because a push cannot change what upstream released. The two
+crates release in lockstep from one repository, so they move together.
+
+Both requirements are held to one minor series with `~`. `cargo install`
+resolves dependencies afresh rather than from the lockfile, so a caret
+requirement lets an install pick up a minor release that adds a `Node`
+variant, and the install fails where the pinned build passes. The pin only
+moves forward, and only after the writers handle what the new series adds.
 
 ## 4. Inputs, and what the readers leave behind
 

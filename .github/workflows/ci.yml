@@ -8,8 +8,8 @@ name: ci
 # The second job watches upstream rather than this repository. docling.rs
 # releases several times a week and has changed the document model inside a
 # minor release; every match on `Node` here is exhaustive, so such a release
-# breaks a build against the newest docling-core the pin admits while the
-# pinned build stays green. It runs weekly and opens an issue, because a push
+# breaks a build against the newest release while the pinned build stays
+# green. It runs weekly and opens an issue, because a push
 # that changes nothing upstream cannot change the answer, and a red tick on
 # every push for something no commit here caused is a check nobody reads.
 # DESIGN.md §3.
@@ -49,10 +49,13 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Move docling-core to its newest release
+      # The two crates release in lockstep, so both move, past the `~` pin.
+      - name: Move docling to its newest release
         id: bump
         run: |
-          cargo update -p docling-core
+          sed -i -E 's/^(docling(-core)? = (\{ version = )?)"~[0-9.]+"/\1"2"/' Cargo.toml
+          [ "$(grep -cE '^docling(-core)? = (\{ version = )?"2"' Cargo.toml)" = 2 ]
+          cargo update -p docling -p docling-core
           version=$(sed -n '/name = "docling-core"/{n;s/version = "\(.*\)"/\1/p;}' Cargo.lock)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "docling-core ${version}"
