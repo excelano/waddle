@@ -113,48 +113,78 @@ fn words(s: &str) -> String {
         .collect()
 }
 
+/// A piece of body text, and whether a heading holds it: the DOCX reader
+/// returns a heading as plain text.
+struct Piece {
+    text: String,
+    heading: bool,
+}
+
+impl From<String> for Piece {
+    fn from(text: String) -> Self {
+        Piece {
+            text,
+            heading: false,
+        }
+    }
+}
+
 /// The body text pieces a reader must give back: everything a person reads.
-fn body_text(nodes: &[Node], out: &mut Vec<String>) {
+fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
     for node in nodes {
         match node {
-            Node::Heading { text, .. }
-            | Node::Paragraph { text }
-            | Node::CheckboxItem { text, .. } => out.push(text.clone()),
+            Node::Heading { text, .. } => out.push(Piece {
+                text: text.clone(),
+                heading: true,
+            }),
+            Node::Paragraph { text }
+            | Node::ListText { text, .. }
+            | Node::CheckboxItem { text, .. } => out.push(text.clone().into()),
             // The Markdown has the runs' text and the links the runs lack.
-            Node::InlineGroup { md_text, .. } => out.push(md_text.clone()),
+            Node::InlineGroup { md_text, .. } => out.push(md_text.clone().into()),
             // The DocLang-only form is what the writer takes when present.
             Node::ListItem {
                 text,
                 dclx,
                 layer: None,
                 ..
-            } => out.push(dclx.as_ref().map_or(text.clone(), |d| d.text.clone())),
-            Node::Code { text, .. } => out.push(text.clone()),
+            } => out.push(
+                dclx.as_ref()
+                    .map_or(text.clone(), |d| d.text.clone())
+                    .into(),
+            ),
+            Node::Code { text, .. } => out.push(text.clone().into()),
             // A cell's blocks in place of its flat text, in the order a
-            // reader that nests rather than flattens would give them.
+            // reader that nests rather than flattens would give them. A
+            // merged cell's blocks live on its anchor, the position it starts
+            // at, and every position it covers reads them there.
             Node::Table(table) | Node::Chart { table, .. } => {
+                let anchors = table.span_anchors();
                 for (r, row) in table.rows.iter().enumerate() {
                     for (c, text) in row.iter().enumerate() {
+                        let (ar, ac) = anchors[r][c];
                         match table
                             .cell_blocks
                             .as_ref()
-                            .and_then(|b| b.get(r))
-                            .and_then(|row| row.get(c))
+                            .and_then(|b| b.get(ar))
+                            .and_then(|row| row.get(ac))
                             .filter(|blocks| !blocks.is_empty())
                         {
                             Some(blocks) => body_text(blocks, out),
-                            None => out.push(text.clone()),
+                            None => out.push(text.clone().into()),
                         }
                     }
                 }
                 if let Some(caption) = &table.caption {
-                    out.push(caption.clone());
+                    out.push(caption.clone().into());
                 }
             }
-            Node::Picture { caption, .. } => out.extend(caption.clone()),
+            Node::Picture { caption, .. } => out.extend(caption.clone().map(Piece::from)),
             // A standalone caption is a paragraph of its own, so its text
             // comes back like any other paragraph's.
-            Node::Caption { text, .. } | Node::LabeledText { text, .. } => out.push(text.clone()),
+            Node::Caption { text, .. } | Node::LabeledText { text, .. } => {
+                out.push(text.clone().into())
+            }
             Node::Group {
                 layer: None,
                 children,
@@ -181,7 +211,7 @@ fn body_text(nodes: &[Node], out: &mut Vec<String>) {
             | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
             // No text of its own.
-            Node::PageBreak => {}
+            Node::PageBreak | Node::Anchor { .. } => {}
         }
     }
 }
@@ -218,24 +248,41 @@ fn orphan_texts_in_docx(target: Target, name: &str) -> bool {
     target == Target::Docx && ORPHAN_TEXTS_IN_DOCX.contains(&name)
 }
 
-/// A source piece as the target's reader can return it. The DOCX reader drops
-/// a hyperlink relationship whose target is a bare fragment, as docling 2.128
-/// does, so an internal link comes back as its text alone. DESIGN.md §6.
-fn as_the_reader_returns(target: Target, piece: &str) -> String {
+/// A source piece as the target's reader can return it. The DOCX reader
+/// returns a heading as plain text, so every link in one comes back as its
+/// text alone, and it drops a hyperlink relationship whose target is a bare
+/// fragment, as docling 2.128 does, so an internal link does too. DESIGN.md §6.
+fn as_the_reader_returns(target: Target, piece: &Piece) -> String {
     if target != Target::Docx {
-        return piece.to_string();
+        return piece.text.clone();
     }
+    let opener = if piece.heading { "](" } else { "](#" };
     let mut out = String::new();
-    let mut rest = piece;
-    while let Some(at) = rest.find("](#") {
+    let mut rest = piece.text.as_str();
+    while let Some(at) = rest.find(opener) {
         out.push_str(&rest[..=at]);
-        match rest[at..].find(')') {
-            Some(close) => rest = &rest[at + close + 1..],
+        match destination_end(&rest[at + 2..]) {
+            Some(end) => rest = &rest[at + 2 + end + 1..],
             None => return out,
         }
     }
     out.push_str(rest);
     out
+}
+
+/// The index of the `)` that closes a link destination, parentheses inside it
+/// balanced: `Taxonomy_(biology))` closes at the second.
+fn destination_end(dest: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, c) in dest.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 0 => return Some(i),
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// ODS is a spreadsheet: it writes the tabular nodes and reports every other
@@ -294,6 +341,7 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             // something else, or dropped by layer or by kind.
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -308,6 +356,7 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::Anchor { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
             | Node::TextDump(_) => 0,
@@ -389,8 +438,14 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     body_text(&doc.nodes, &mut pieces);
     let mut back_pieces = Vec::new();
     body_text(&back.nodes, &mut back_pieces);
-    let haystack = words(&back_pieces.join(" "));
-    let missing: Vec<&String> = pieces
+    let haystack = words(
+        &back_pieces
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    let missing: Vec<&Piece> = pieces
         .iter()
         .filter(|p| {
             let w = words(&as_the_reader_returns(target, p));
@@ -406,7 +461,7 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
             missing
                 .iter()
                 .take(3)
-                .map(|s| s.chars().take(60).collect::<String>())
+                .map(|p| p.text.chars().take(60).collect::<String>())
                 .collect::<Vec<_>>()
         ));
     }

@@ -133,6 +133,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             }
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -148,6 +149,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::Anchor { .. }
             | Node::TextDump(_) => {}
         }
     }
@@ -193,6 +195,7 @@ fn load(uri: &str, input: &Input) -> Result<PictureImage, String> {
         height,
         data: bytes,
         dpi: PictureImage::DEFAULT_DPI,
+        display_size: None,
     })
 }
 

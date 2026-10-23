@@ -331,6 +331,35 @@ fn a_track_a_labelled_text_and_a_furniture_text_follow_docling() {
     }
 }
 
+/// The variants docling-core 2.49 added: a list text, the AsciiDoc reader's
+/// paragraph inside a list, is the paragraph every serializer but docling's
+/// Markdown list reads it as; an anchor, the `.doc` reader's bookmark, is
+/// JSON-only upstream and writes nothing, without a warning.
+#[test]
+fn a_list_text_is_a_paragraph_and_an_anchor_writes_nothing() {
+    let mut doc = DoclingDocument::new("t");
+    doc.add_paragraph("before");
+    doc.push(Node::Anchor { id: "here".into() });
+    doc.push(Node::ListText {
+        level: 1,
+        text: "a list text".into(),
+        glue: false,
+    });
+    let mut expected = DoclingDocument::new("t");
+    expected.add_paragraph("before");
+    expected.add_paragraph("a list text");
+    for target in [Target::Odt, Target::Docx] {
+        let (back, out) = trip(target, &doc);
+        assert!(out.warnings.is_empty(), "{target:?}: {:?}", out.warnings);
+        assert_eq!(
+            back.export_to_doclang(),
+            expected.export_to_doclang(),
+            "{target:?}"
+        );
+        assert_fixed_point_for(target, &back);
+    }
+}
+
 /// An author's alt text is the `descr` the DOCX reader reads it from; a
 /// description with any other provenance is not written as one.
 #[test]
@@ -507,31 +536,7 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
         caption_parent: CaptionParent::Body,
         caption_location: None,
     });
-    // The placeholder the writer embeds is a valid PNG; take it from the
-    // writer's own output to serve as real bytes for the second picture.
-    let png = {
-        let out = odt::write(&doc).unwrap();
-        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(out.bytes)).unwrap();
-        let mut file = archive.by_name("Pictures/image1.png").unwrap();
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut file, &mut bytes).unwrap();
-        bytes
-    };
-    doc.push(Node::Picture {
-        caption: None,
-        caption_href: None,
-        image: Some(docling_core::PictureImage {
-            mimetype: "image/png".into(),
-            width: 16,
-            height: 12,
-            data: png,
-            dpi: docling_core::PictureImage::DEFAULT_DPI,
-        }),
-        classification: None,
-        description: None,
-        caption_parent: CaptionParent::Body,
-        caption_location: None,
-    });
+    doc.push(png_picture(None));
     doc.add_paragraph("after");
     let (back, out) = odt_trip(&doc);
     assert_eq!(out.warnings.len(), 1, "{:?}", out.warnings);
@@ -542,6 +547,75 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
     let kinds: Vec<&str> = back.nodes.iter().map(waddle_core::node::kind).collect();
     assert_eq!(kinds, vec!["paragraph", "picture", "picture", "paragraph"]);
     assert_fixed_point(&back);
+}
+
+/// A picture of the placeholder the writer embeds, which is a valid 16 by 12
+/// PNG, taken from the writer's own output to serve as real bytes.
+fn png_picture(display_size: Option<[f32; 2]>) -> Node {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Picture {
+        caption: None,
+        caption_href: None,
+        image: None,
+        classification: None,
+        description: None,
+        caption_parent: CaptionParent::Body,
+        caption_location: None,
+    });
+    let out = odt::write(&doc).unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(out.bytes)).unwrap();
+    let mut file = archive.by_name("Pictures/image1.png").unwrap();
+    let mut png = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut png).unwrap();
+    Node::Picture {
+        caption: None,
+        caption_href: None,
+        image: Some(docling_core::PictureImage {
+            mimetype: "image/png".into(),
+            width: 16,
+            height: 12,
+            data: png,
+            dpi: docling_core::PictureImage::DEFAULT_DPI,
+            display_size,
+        }),
+        classification: None,
+        description: None,
+        caption_parent: CaptionParent::Body,
+        caption_location: None,
+    }
+}
+
+/// The size a picture was displayed at in its source is the size it is
+/// written at, and both readers read it back; without one, the pixels at
+/// 96 dpi, and wider than the text it is scaled to the text width.
+#[test]
+fn a_picture_keeps_its_displayed_size() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(png_picture(Some([2.5, 1.25])));
+    doc.push(png_picture(None));
+    doc.push(png_picture(Some([13.0, 2.0])));
+    for target in [Target::Odt, Target::Docx] {
+        let (back, _) = trip(target, &doc);
+        let sizes: Vec<[f32; 2]> = back
+            .nodes
+            .iter()
+            .filter_map(|n| match n {
+                Node::Picture { image, .. } => image.as_ref()?.display_size,
+                _ => None,
+            })
+            .collect();
+        let expected = [[2.5, 1.25], [16.0 / 96.0, 12.0 / 96.0], [6.5, 1.0]];
+        assert_eq!(sizes.len(), expected.len(), "{target:?}: {sizes:?}");
+        for (got, want) in sizes.iter().zip(expected) {
+            for axis in 0..2 {
+                assert!(
+                    (got[axis] - want[axis]).abs() < 0.001,
+                    "{target:?}: {sizes:?}"
+                );
+            }
+        }
+        assert_fixed_point_for(target, &back);
+    }
 }
 
 #[test]

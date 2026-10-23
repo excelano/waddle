@@ -124,6 +124,7 @@ impl Walk {
             // swept up, so a variant docling.rs adds fails the build here.
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -139,6 +140,7 @@ impl Walk {
             | Node::PictureChildren(_)
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::Anchor { .. }
             | Node::TextDump(_) => self.warn(node, Reason::Unsupported),
         }
     }

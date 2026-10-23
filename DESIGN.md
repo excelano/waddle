@@ -235,12 +235,12 @@ level 1 would read back one level deeper than it went in.
 |---|---|
 | Heading level 1 | `text:p` with the `Title` paragraph style |
 | Heading level N > 1 | `text:h text:outline-level="N-1"` with `Heading_20_N-1` |
-| Paragraph, InlineGroup | `text:p`; runs as `text:span` on automatic text styles; `text:a xlink:href` for links; `text:line-break`, `text:tab`, `text:s` for whitespace |
+| Paragraph, InlineGroup, ListText | `text:p`; runs as `text:span` on automatic text styles; `text:a xlink:href` for links; `text:line-break`, `text:tab`, `text:s` for whitespace |
 | ListItem | nested `text:list` / `text:list-item`, rebuilt from the flat level sequence, every element naming a generated `text:list-style` whose levels say numbered or bullet and where numbering starts, since the reader reads the kind from the element's own style and the start from the level; a new element opens where the model says a list begins or the kind changes; a level deeper than one below its parent nests one deeper, which is where the reader would put it; numbered levels show the enclosing numbers (`1.1.`) in Writer through `text:display-levels`, which the reader does not read |
 | CheckboxItem | `text:p` prefixed `☐ ` or `☑ `; ODF text has no checkbox and the reader detects none |
 | Code | one `text:p` in the `Preformatted_20_Text` style, lines as `text:line-break`, so the block returns as one paragraph with its newlines rather than one paragraph per line; the `pretty` form when the pipeline made one; the reader has no code detection, see §6 |
 | Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the leading rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; a cell with rich blocks holds them as body nodes; a plain cell is `office:value-type="string"`, which the reader reads flat, and a cell with any span or link is left untyped, which the reader reads as rich and so keeps its runs and links; header cells in the `Table_20_Heading` paragraph style, bold on the style rather than a span so it does not return as `**bold**` |
-| Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized from the pixels at 96 dpi and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
+| Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized at the display size the source recorded where the reader kept one, else from the pixels at 96 dpi, and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
 | Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; MathML is a later release |
 | Caption | a standalone caption, one no picture or table claimed: a `text:p` in the `Caption` style, the caption's hyperlink annotation applied to every run that carries no link of its own, which is the link docling's Markdown wraps the whole caption in; an empty one is no paragraph, as it is no line in Markdown |
@@ -253,6 +253,7 @@ level 1 would read back one level deeper than it went in.
 | Furniture, FurnitureText, PageFurniture, CommentSection, PageInfo | dropped |
 | KeyValueGraph | dropped with a warning; only docling's JSON carries the graph and no office format has a construct for it |
 | PictureChildren | dropped without a warning; the text inside a PDF picture is JSON-only in every serializer docling.rs has, and the picture itself is written |
+| Anchor | dropped without a warning; a link destination, a `.doc` bookmark, is rendered by docling's JSON export alone |
 
 ### DOCX
 
@@ -263,7 +264,7 @@ not repeated.
 |---|---|
 | Heading level 1 | `w:pStyle w:val="Title"` |
 | Heading level N > 1 | `w:pStyle w:val="HeadingN-1"`, up to `Heading9`, with `styles.xml` naming it `heading N-1` and carrying `w:outlineLvl w:val="N-2"`; the reader reads all three and they agree |
-| Paragraph, InlineGroup | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`, Consolas `w:rFonts` for code); newlines as `w:br`, tabs as the character; links as `w:hyperlink r:id` with one relationship per distinct target and the `Hyperlink` character style, which the reader does not resolve; a blank paragraph is written as an empty `w:p`, because the reader returns one as an empty text node and that is how Word keeps a blank line |
+| Paragraph, InlineGroup, ListText | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`, Consolas `w:rFonts` for code); newlines as `w:br`, tabs as the character; links as `w:hyperlink r:id` with one relationship per distinct target and the `Hyperlink` character style, which the reader does not resolve; a blank paragraph is written as an empty `w:p`, because the reader returns one as an empty text node and that is how Word keeps a blank line |
 | ListItem | `w:numPr` with `w:ilvl` for the level and a `w:numId`; numbered or bullet is decided in `numbering.xml` by the level's `w:numFmt`, the only signal the reader uses; one definition per distinct vector of levels and one `w:num` per list, since the reader counts per `w:num`; a new `w:num` opens where the model says a list begins, where the kind changes at the top level, or where the count breaks, because the DOCX reader marks no item as first in its list and a jump in the number is the other sign of a new list |
 | CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
@@ -349,7 +350,7 @@ document has one, and a document that is a deck has one per slide.
 |---|---|
 | Heading, level 1 | the slide, and a `draw:frame` with `presentation:class="title"` holding its text |
 | Heading, level 2 and deeper | `text:h` in the slide's text box at one outline level shallower, the inverse of the reader |
-| Paragraph, InlineGroup, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
+| Paragraph, InlineGroup, ListText, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
 | ListItem | `text:list`, which `add_odf_list` reads back; the stock marker style means an ordered list returns unordered |
 | Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it |
 | Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the grey PNG |
@@ -482,14 +483,23 @@ undecoded, so the scanner decodes the entities docling writes into a
 destination and writes the character; the file is right and the second
 trip is equal. A hyperlink to a bare fragment, `#section-2`, loses its target,
 because the reader drops a relationship whose target starts with `#` before
-it reads the package, as docling 2.128 does, and it reads no `w:anchor`; the
+it reads the package, as docling 2.128 does, and it resolves a `w:anchor` only
+to a bookmark the document holds, which this writer does not write; the
 link comes back as its text, and the corpus test compares a DOCX trip with
-fragment-only link destinations removed from the source. Header rows beyond
+fragment-only link destinations removed from the source. A heading or title
+returns as plain text, as docling's `paragraph.text` gives it, so every link in
+one comes back as its text alone, and the corpus test removes a heading's link
+destinations before comparing it. Header rows beyond
 the first are lost as in ODT. A multi-run paragraph in a rich cell returns
 as one cell block per run, and the reader leaves an empty DocLang-only text
 after the table for each such paragraph; written again, the blocks are
 single-run paragraphs and the second trip carries no such text. Every cell is
 the same on both trips, and the corpus test names the document this bites.
+
+A list text, the paragraph the AsciiDoc reader hangs in a list, returns as a
+paragraph. DocLang reads it as one, so the DocLang is unchanged; docling's
+Markdown prints it as one more line of its list and prints the paragraph after
+the list, so the Markdown differs.
 
 Everything on the furniture, notes and invisible layers is dropped on the
 way out and cannot return, and reviewer comments are in that set.

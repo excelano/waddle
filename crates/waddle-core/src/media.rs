@@ -4,6 +4,8 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
+use docling_core::PictureImage;
+
 /// A 16 by 12 light grey PNG, written where a picture arrives without
 /// bytes. A frame with no image part reads back as nothing in either
 /// reader, so the placeholder is a real picture, and the readers return a
@@ -22,14 +24,20 @@ pub const PLACEHOLDER_SIZE_IN: (f64, f64) = (2.0, 1.5);
 /// The text width inside the stock page, in inches.
 const TEXT_WIDTH_IN: f64 = 6.5;
 
-/// A picture's size on the page: its pixel size at 96 dpi, scaled down to
-/// the text width when wider.
-pub fn fit(width_px: u32, height_px: u32) -> (f64, f64) {
-    if width_px == 0 || height_px == 0 {
+/// A picture's size on the page: the size its source document displayed it
+/// at where the reader recorded one, else its pixel size at 96 dpi, scaled
+/// down to the text width when wider.
+pub fn fit(image: &PictureImage) -> (f64, f64) {
+    let (w, h) = match image.display_size {
+        Some([w, h]) => (f64::from(w), f64::from(h)),
+        None => (
+            f64::from(image.width) / 96.0,
+            f64::from(image.height) / 96.0,
+        ),
+    };
+    if w <= 0.0 || h <= 0.0 {
         return PLACEHOLDER_SIZE_IN;
     }
-    let w = f64::from(width_px) / 96.0;
-    let h = f64::from(height_px) / 96.0;
     if w > TEXT_WIDTH_IN {
         (TEXT_WIDTH_IN, h * TEXT_WIDTH_IN / w)
     } else {
