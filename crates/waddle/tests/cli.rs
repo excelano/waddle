@@ -65,6 +65,7 @@ fn document() -> DoclingDocument {
             height: 12,
             data: PNG.to_vec(),
             dpi: PictureImage::DEFAULT_DPI,
+            display_size: None,
         }),
         classification: None,
         description: None,

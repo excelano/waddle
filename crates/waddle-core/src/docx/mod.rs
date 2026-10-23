@@ -235,7 +235,9 @@ impl Writer {
             }
             // The reader returns a blank paragraph as an empty text node, so
             // one is written for one; it is how Word keeps a blank line.
-            Node::Paragraph { text } => self.paragraph(None, &inline::from_markdown(text), true),
+            Node::Paragraph { text } | Node::ListText { text, .. } => {
+                self.paragraph(None, &inline::from_markdown(text), true)
+            }
             Node::InlineGroup { runs, md_text, .. } => {
                 self.paragraph(None, &inline::from_group(md_text, runs), true)
             }
@@ -344,8 +346,9 @@ impl Writer {
                 .body
                 .push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n"),
             // Page geometry has no content to carry and is not worth a warning,
-            // and the text inside a picture is JSON-only in every other serializer.
-            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
+            // and a link destination and the text inside a picture are JSON-only
+            // in every other serializer.
+            Node::PageInfo { .. } | Node::Anchor { .. } | Node::PictureChildren(_) => {}
             Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
@@ -537,7 +540,7 @@ impl Writer {
             Some(image) => (
                 image.mimetype.as_str(),
                 image.data.as_slice(),
-                media::fit(image.width, image.height),
+                media::fit(image),
             ),
             None => {
                 self.warnings.push(Warning {
@@ -558,8 +561,8 @@ impl Writer {
         });
         self.rels.push(Rel::Image(part));
         let rid = rel_id(self.rels.len() - 1);
-        let cx = (width_in * EMU_PER_INCH) as u64;
-        let cy = (height_in * EMU_PER_INCH) as u64;
+        let cx = (width_in * EMU_PER_INCH).round() as u64;
+        let cy = (height_in * EMU_PER_INCH).round() as u64;
         let descr = alt.map_or(String::new(), |a| format!(" descr=\"{}\"", xml::attr(a)));
         self.body.push_str(&format!(
             "<w:p><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{index}\" name=\"Picture {index}\"{descr}/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"{index}\" name=\"image{index}.{extension}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\"{rid}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\n"

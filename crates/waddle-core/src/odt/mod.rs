@@ -238,7 +238,7 @@ impl Writer {
             Node::Heading { level, text } => {
                 self.heading(*level, &collapse_spaces(inline::from_markdown(text)))
             }
-            Node::Paragraph { text } => {
+            Node::Paragraph { text } | Node::ListText { text, .. } => {
                 self.paragraph("Text_20_body", &inline::from_markdown(text))
             }
             Node::InlineGroup { runs, md_text, .. } => {
@@ -335,8 +335,9 @@ impl Writer {
             }
             Node::PageBreak => self.body.push_str("<text:p text:style-name=\"Pbreak\"/>\n"),
             // Page geometry has no content to carry and is not worth a warning,
-            // and the text inside a picture is JSON-only in every other serializer.
-            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
+            // and a link destination and the text inside a picture are JSON-only
+            // in every other serializer.
+            Node::PageInfo { .. } | Node::Anchor { .. } | Node::PictureChildren(_) => {}
             Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
@@ -475,7 +476,7 @@ impl Writer {
         }
         let (media_type, bytes, width_in, height_in) = match image {
             Some(image) => {
-                let (w, h) = media::fit(image.width, image.height);
+                let (w, h) = media::fit(image);
                 (image.mimetype.as_str(), image.data.as_slice(), w, h)
             }
             None => {

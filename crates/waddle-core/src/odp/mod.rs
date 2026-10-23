@@ -125,13 +125,14 @@ impl Writer {
                     node,
                     Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
                 ),
-                Node::PictureChildren(_) => {}
+                Node::Anchor { .. } | Node::PictureChildren(_) => {}
                 Node::CommentSection { .. }
                 | Node::KeyValueGraph { .. }
                 | Node::PageFurniture { .. }
                 | Node::PageInfo { .. } => self.warn(node, Reason::Unsupported),
                 Node::Heading { .. }
                 | Node::Paragraph { .. }
+                | Node::ListText { .. }
                 | Node::CheckboxItem { .. }
                 | Node::ListItem { .. }
                 | Node::Code { .. }
@@ -230,6 +231,7 @@ impl Writer {
             }
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -251,7 +253,8 @@ impl Writer {
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
-            | Node::PageInfo { .. } => {}
+            | Node::PageInfo { .. }
+            | Node::Anchor { .. } => {}
         }
     }
 
@@ -328,6 +331,7 @@ impl Writer {
             }
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -349,7 +353,8 @@ impl Writer {
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
-            | Node::PageInfo { .. } => {}
+            | Node::PageInfo { .. }
+            | Node::Anchor { .. } => {}
         }
     }
 
@@ -367,7 +372,9 @@ impl Writer {
                 self.runs(&inline::from_markdown(text));
                 self.body.push_str("</text:h>\n");
             }
-            Node::Paragraph { text } => self.paragraph(&inline::from_markdown(text)),
+            Node::Paragraph { text } | Node::ListText { text, .. } => {
+                self.paragraph(&inline::from_markdown(text))
+            }
             Node::InlineGroup { runs, md_text, .. } => {
                 self.paragraph(&inline::from_group(md_text, runs))
             }
@@ -424,7 +431,8 @@ impl Writer {
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
-            | Node::PageInfo { .. } => {}
+            | Node::PageInfo { .. }
+            | Node::Anchor { .. } => {}
         }
     }
 
@@ -498,7 +506,7 @@ impl Writer {
     fn picture_frame(&mut self, image: Option<&PictureImage>) {
         let (media_type, bytes, width_in, height_in) = match image {
             Some(image) => {
-                let (w, h) = media::fit(image.width, image.height);
+                let (w, h) = media::fit(image);
                 (image.mimetype.as_str(), image.data.as_slice(), w, h)
             }
             None => {
@@ -573,6 +581,7 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             // adds is decided here rather than landing on a slide by default.
             Node::Heading { .. }
             | Node::Paragraph { .. }
+            | Node::ListText { .. }
             | Node::CheckboxItem { .. }
             | Node::ListItem { .. }
             | Node::Code { .. }
@@ -597,7 +606,8 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
-            | Node::PageInfo { .. } => {
+            | Node::PageInfo { .. }
+            | Node::Anchor { .. } => {
                 if slides.is_empty() {
                     slides.push(Slide::default());
                 }
@@ -618,6 +628,7 @@ fn takes_own_frame(node: &Node) -> bool {
         }
         Node::Heading { .. }
         | Node::Paragraph { .. }
+        | Node::ListText { .. }
         | Node::CheckboxItem { .. }
         | Node::ListItem { .. }
         | Node::Code { .. }
@@ -639,7 +650,8 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::PageFurniture { .. }
         | Node::KeyValueGraph { .. }
         | Node::PictureChildren(_)
-        | Node::PageInfo { .. } => false,
+        | Node::PageInfo { .. }
+        | Node::Anchor { .. } => false,
     }
 }
 

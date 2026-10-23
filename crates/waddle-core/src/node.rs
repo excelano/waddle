@@ -14,6 +14,7 @@ pub fn kind(node: &Node) -> &'static str {
     match node {
         Node::Heading { .. } => "heading",
         Node::Paragraph { .. } => "paragraph",
+        Node::ListText { .. } => "list_text",
         Node::CheckboxItem { .. } => "checkbox_item",
         Node::ListItem { .. } => "list_item",
         Node::Code { .. } => "code",
@@ -38,6 +39,7 @@ pub fn kind(node: &Node) -> &'static str {
         Node::PictureChildren(_) => "picture_children",
         Node::PageBreak => "page_break",
         Node::PageInfo { .. } => "page_info",
+        Node::Anchor { .. } => "anchor",
         Node::DoclangOnly(_) => "doclang_only",
         Node::TextDump(_) => "text_dump",
     }
