@@ -34,7 +34,7 @@ Exit codes:
 
 /// Write an ODT or DOCX from a DocLang or docling JSON document.
 #[derive(Parser, Debug)]
-#[command(version, about, after_help = EXIT_CODES)]
+#[command(version = skill::version(), about, after_help = EXIT_CODES)]
 struct Cli {
     /// DocLang (.dclg), DocLang archive (.dclx) or docling JSON; `-` reads stdin
     #[arg(required_unless_present_any = ["install_skill", "uninstall_skill"])]

@@ -24,6 +24,7 @@ roxmltree.workspace = true
 serde_json.workspace = true
 image.workspace = true
 zip.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 docling-core.workspace = true

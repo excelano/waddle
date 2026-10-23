@@ -1552,6 +1552,7 @@ dependencies = [
  "image",
  "roxmltree 0.21.1",
  "serde_json",
+ "sha2 0.11.1",
  "waddle-core",
  "zip 8.6.0",
 ]

@@ -214,10 +214,17 @@ fn the_skill_installs_into_the_home_directory() {
     let skill = home.join(".claude/skills/waddle/SKILL.md");
     let body = std::fs::read_to_string(&skill).unwrap();
     assert!(body.starts_with("---\nname: waddle\n"));
-    assert!(body.contains(&format!(
-        "This skill documents waddle {}",
-        env!("CARGO_PKG_VERSION")
-    )));
+    let version = text(&waddle(&["-V"], None).stdout);
+    let revision = version
+        .trim()
+        .strip_suffix(')')
+        .and_then(|v| v.rsplit_once("(skill "))
+        .map(|(_, r)| r.to_string())
+        .unwrap_or_else(|| panic!("no skill revision in {version:?}"));
+    assert!(
+        body.contains(&format!("> This skill is revision {revision}.")),
+        "the stamp does not match {version:?}"
+    );
     assert!(home.join(".claude/skills/waddle/reference.md").is_file());
     let again = Command::new(env!("CARGO_BIN_EXE_waddle"))
         .arg("--install-skill")

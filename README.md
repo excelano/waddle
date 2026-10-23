@@ -49,7 +49,7 @@ waddle was built for AI coding agents as much as for people, so the repository s
 
     waddle --install-skill
 
-That writes `~/.claude/skills/waddle/` and stamps in the version it came from, so a later run reports whether the skill has fallen behind the binary. It is safe to re-run: an unchanged skill reports `already current` and nothing is written. `waddle --uninstall-skill` removes it. Restart Claude Code afterwards, since skills are discovered at session start. The skill is compiled into the binary, so this works however waddle was installed.
+That writes `~/.claude/skills/waddle/` and stamps in the skill's revision, which `waddle -V` also prints, so a later run reports whether the skill has fallen behind the binary. It is safe to re-run: an unchanged skill reports `already current` and nothing is written. `waddle --uninstall-skill` removes it. Restart Claude Code afterwards, since skills are discovered at session start. The skill is compiled into the binary, so this works however waddle was installed.
 
 ## The family
 
