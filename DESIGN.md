@@ -8,7 +8,7 @@ times a week, so check a claim against it rather than against this file's age.
 ## 1. What this repository is
 
 A DoclingDocument in, an office package out. docling.rs converts DOCX, PPTX,
-XLSX, ODT, ODS, ODP, PDF, HTML, EPUB and some forty other formats into a
+XLSX, ODT, ODS, ODP, PDF, HTML, EPUB and many other formats into a
 `DoclingDocument` and exports it as Markdown, docling JSON, DocLang, a
 DocLang archive or LaTeX. Nothing in that tree writes an office format:
 its complete writer inventory is the CLI's `--to` list, and the only
@@ -55,7 +55,7 @@ dependency is what would make the capability cheap for upstream to accept.
 `DoclingDocument` (`crates/docling-core/src/document.rs`) is a struct with a
 public `nodes: Vec<Node>` and a handful of document-level fields: name, two
 Markdown flags, a `links` list only the PDF pipeline fills, and an optional
-confidence report. `Node` is an enum of twenty-eight variants. The ones that
+confidence report. `Node` is an enum. The variants that
 carry content are heading with a level, paragraph, checkbox item, list item
 with ordering, level, number and marker, code with an optional language,
 table, picture with an optional caption, optional bytes and an optional
@@ -170,9 +170,8 @@ bytes are asked what they are: the image format and size come from the
 data, not from the name. Pairing by ordinal is the weak point, and it holds
 because the reader emits pictures in document order; when the two counts
 differ nothing is paired and the run says so, and every picture is a
-placeholder. This is a workaround for an upstream gap and the issue to
-raise is that `DoclangBackend` should read `<src>`; when it does, this code
-is deleted. None of this is the library's. It writes the bytes a `Picture`
+placeholder. This is a workaround for an upstream gap: `DoclangBackend`
+does not read `<src>`. None of this is the library's. It writes the bytes a `Picture`
 carries and a placeholder when it carries none.
 
 **Inline formatting arrives as Markdown markers.** The DocLang reader
@@ -242,7 +241,7 @@ level 1 would read back one level deeper than it went in.
 | Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the leading rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; a cell with rich blocks holds them as body nodes; a plain cell is `office:value-type="string"`, which the reader reads flat, and a cell with any span or link is left untyped, which the reader reads as rich and so keeps its runs and links; header cells in the `Table_20_Heading` paragraph style, bold on the style rather than a span so it does not return as `**bold**` |
 | Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized at the display size the source recorded where the reader kept one, else from the pixels at 96 dpi, and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
 | Chart | with data, its caption then its table; without, a placeholder picture |
-| Formula | the LaTeX source as a `text:p` in the code style; MathML is a later release |
+| Formula | the LaTeX source as a `text:p` in the code style; no MathML |
 | Caption | a standalone caption, one no picture or table claimed: a `text:p` in the `Caption` style, the caption's hyperlink annotation applied to every run that carries no link of its own, which is the link docling's Markdown wraps the whole caption in; an empty one is no paragraph, as it is no line in Markdown |
 | LabeledText | the paragraph docling-core's `labeled_as_paragraph` makes of it, `[text](uri)` when it carries a link; the label, a PDF footnote's, does not return, since neither reader assigns one |
 | FieldRegion | a two-column table of key and value |
@@ -507,7 +506,7 @@ way out and cannot return, and reviewer comments are in that set.
 The writer reports each of these as a warning naming the node and the
 reason, and `--strict` turns any of them into a refusal.
 
-## 7. The five packages
+## 7. The packages
 
 **ODT.** One `content.xml`, a small `styles.xml`, `META-INF/manifest.xml`,
 `mimetype` stored first, `Pictures/` when there are bytes.
@@ -567,12 +566,11 @@ Duckling's.
 
 ## 10. Duckling integration
 
-Duckling adds `waddle-core` as a dependency at a version whose
-`docling-core` unifies with its own `docling`'s. Its output picker gains
-ODT and DOCX, with ODS and XLSX when a batch is tables. The queue already
-accepts DocLang and JSON through docling.rs, so nothing changes on input.
-Pictures invert: the bytes go into the package rather than beside the
-file, and Duckling's own asset pairing is not involved because the
-`DoclingDocument` it holds already carries them. `DESIGN.md` there gets one
-paragraph: Duckling composes docling.rs and waddle, and the principle that
-it adds no conversion logic is unchanged.
+Duckling depends on `waddle-core` at a version whose `docling-core`
+unifies with its own `docling`'s. Its output picker offers ODT and DOCX,
+with ODS and XLSX when a batch is tables. The queue accepts DocLang and
+JSON through docling.rs, so input is unchanged. Pictures invert: the bytes
+go into the package rather than beside the file, and Duckling's own asset
+pairing is not involved because the `DoclingDocument` it holds already
+carries them. Duckling composes docling.rs and waddle and adds no
+conversion logic of its own.

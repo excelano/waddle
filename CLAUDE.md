@@ -1,9 +1,9 @@
 # CLAUDE.md
 
-A DoclingDocument in, an office package out. docling.rs reads some forty formats into a
+A DoclingDocument in, an office package out. docling.rs reads many formats into a
 `DoclingDocument` and writes Markdown, JSON, DocLang and LaTeX from it; nothing in that
 tree writes an office format, and this is the writer. `crates/waddle-core` is the library —
-it takes a `docling_core::DoclingDocument` and returns the bytes of an ODT or DOCX package
+it takes a `docling_core::DoclingDocument` and returns the bytes of an OpenDocument or Office Open XML package
 with the warnings raised on the way, depends on `docling-core` and on nothing else of
 docling's, and is `forbid(unsafe_code)`. `crates/waddle` is the CLI. docling.rs's own
 office *readers* are the authority on which XML constructs map to which node, and so on
@@ -21,9 +21,10 @@ and §6 what cannot round-trip.
 
 `WADDLE_DUMP=dir` keeps every package a test writes, named by the test, for opening in
 Writer by hand. `WADDLE_CORPUS_WRITER=1` opens every corpus package in headless Writer, a
-second per document. The round-trip corpus is `crates/docling/tests/data/<format>/sources/`
-in a checkout of docling.rs, which moves several times a week, so pull before reading it;
-where that checkout lives is a fact about a machine and is not written down here. The build
+second per document. The round-trip corpus is `crates/docling/tests/data` in a checkout of docling.rs, with a
+format's sources in that directory, in the mirror at the repository root, or both; the
+tests look for the checkout at `~/clones/docling.rs` or wherever `WADDLE_CORPUS` points.
+It moves several times a week, so pull before reading it. The build
 directory is the shared one in `~/.cargo/config.toml`. Releases: the apps in excelano/shipping, run from this directory.
 
 ## Rules

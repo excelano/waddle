@@ -36,7 +36,7 @@ formula = "waddle"
 maintainer = "David M. Anderson <david.anderson@excelano.com>"
 extended-description = """
 waddle writes an OpenDocument or Office Open XML package from a docling
-DoclingDocument: DocLang, a DocLang archive, or docling JSON in, ODT or DOCX
+DoclingDocument: DocLang, a DocLang archive, or docling JSON in, ODT, DOCX, ODS, ODP or XLSX
 out, offline and in pure Rust. docling.rs reads office documents and writes
 none; waddle is the writer. Output is deliberately plain, the document a
 well-structured Markdown file would give you opened in Writer or Word, and
