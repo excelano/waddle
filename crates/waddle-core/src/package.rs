@@ -63,11 +63,11 @@ mod tests {
         .unwrap();
         let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
         let first = archive.by_index(0).unwrap();
-        assert_eq!(first.name(), "mimetype");
+        assert_eq!(first.name().unwrap(), "mimetype");
         assert_eq!(first.compression(), CompressionMethod::Stored);
         drop(first);
         let second = archive.by_index(1).unwrap();
-        assert_eq!(second.name(), "content.xml");
+        assert_eq!(second.name().unwrap(), "content.xml");
         assert_eq!(second.compression(), CompressionMethod::Deflated);
     }
 }

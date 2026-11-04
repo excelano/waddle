@@ -202,6 +202,7 @@ mod tests {
             inner: Box::new(Node::Table(table_of(vec![vec!["x"]], None))),
             page_no: 1,
             bbox: [0.0, 0.0, 1.0, 1.0],
+            bottom_left: false,
             charspan: [0, 0],
             seq: None,
         });
