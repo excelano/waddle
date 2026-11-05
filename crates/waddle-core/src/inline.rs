@@ -234,10 +234,8 @@ fn scan(chars: &[char], style: &Run, out: &mut Vec<Run>) {
         {
             flush(&mut plain, style, out);
             let uri: String = chars[anchor_end + 2..dest_end].iter().collect();
-            // A destination is written with docling's entities too; decoded,
-            // so that `&amp;` in a query string is the `&` it means.
             let linked = Run {
-                href: Some(unescape_entities(&uri)),
+                href: Some(decode_destination(&uri)),
                 ..style.with_text(String::new())
             };
             scan(&chars[i + 1..anchor_end], &linked, out);
@@ -376,10 +374,29 @@ fn entity(chars: &[char]) -> Option<(char, usize)> {
 }
 
 fn unescape_entities(s: &str) -> String {
+    decode(s, false)
+}
+
+/// A link destination as the URI it means. docling writes one with its
+/// entities and its Markdown escapes, `Albert\_Einstein` for
+/// `Albert_Einstein`, and CommonMark decodes both there.
+fn decode_destination(s: &str) -> String {
+    decode(s, true)
+}
+
+fn decode(s: &str, backslashes: bool) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
     while i < chars.len() {
+        if backslashes
+            && chars[i] == '\\'
+            && chars.get(i + 1).is_some_and(char::is_ascii_punctuation)
+        {
+            out.push(chars[i + 1]);
+            i += 2;
+            continue;
+        }
         if chars[i] == '&'
             && let Some((decoded, len)) = entity(&chars[i..])
         {
@@ -541,6 +558,17 @@ mod tests {
     fn a_destination_is_decoded() {
         let runs = from_markdown("[edit](/w?title=Duck&amp;action=edit)");
         assert_eq!(runs[0].href.as_deref(), Some("/w?title=Duck&action=edit"));
+    }
+
+    /// Catches a destination written with its Markdown escapes still in it,
+    /// which a reader returns percent-encoded as `Albert%5C_Einstein`.
+    #[test]
+    fn a_destination_drops_its_escapes() {
+        let runs = from_markdown(r"[$$E=mc^2$$](https://en.wikipedia.org/wiki/Albert\_Einstein)");
+        assert_eq!(
+            runs[0].href.as_deref(),
+            Some("https://en.wikipedia.org/wiki/Albert_Einstein")
+        );
     }
 
     #[test]

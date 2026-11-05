@@ -251,7 +251,9 @@ fn orphan_texts_in_docx(target: Target, name: &str) -> bool {
 /// A source piece as the target's reader can return it. The DOCX reader
 /// returns a heading as plain text, so every link in one comes back as its
 /// text alone, and it drops a hyperlink relationship whose target is a bare
-/// fragment, as docling 2.128 does, so an internal link does too. DESIGN.md §6.
+/// fragment, as docling 2.128 does, so an internal link does too. It writes
+/// each `&` of a link destination as `&amp;amp;`, escaping it twice where the
+/// ODF reader writes it as it is. DESIGN.md §6.
 fn as_the_reader_returns(target: Target, piece: &Piece) -> String {
     if target != Target::Docx {
         return piece.text.clone();
@@ -267,7 +269,80 @@ fn as_the_reader_returns(target: Target, piece: &Piece) -> String {
         }
     }
     out.push_str(rest);
+    escaped_twice_in_destinations(&out)
+}
+
+/// `text` with every `&` inside a link destination written `&amp;amp;`.
+fn escaped_twice_in_destinations(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("](") {
+        out.push_str(&rest[..at + 2]);
+        rest = &rest[at + 2..];
+        let Some(end) = destination_end(rest) else {
+            break;
+        };
+        out.push_str(&rest[..end].replace('&', "&amp;amp;"));
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
     out
+}
+
+/// The corpus documents whose DOCX second trip is not a fixed point because
+/// a link destination has an `&` in it: the reader escapes it twice, so each
+/// trip adds an `amp;`. DESIGN.md §6.
+const AMPERSAND_LINKS_IN_DOCX: &[&str] = &["wiki_duck.html"];
+
+fn ampersand_links_in_docx(target: Target, name: &str) -> bool {
+    target == Target::Docx && AMPERSAND_LINKS_IN_DOCX.contains(&name)
+}
+
+/// Whether the target's reader can return this picture as a picture at all.
+/// The ODF reader, following docling's `_odf_image_can_be_bitmap`, takes no
+/// `image/svg+xml` frame as a picture, and docling 2.53 and later render a
+/// DOCX's DrawingML shapes and text boxes as SVG. DESIGN.md §6.
+fn read_as_a_picture(target: Target, image: Option<&docling_core::PictureImage>) -> bool {
+    let svg = image.is_some_and(|i| i.mimetype == "image/svg+xml");
+    !(svg && matches!(target, Target::Odt | Target::Odp))
+}
+
+/// The placeholder as the DOCX reader returns it. That reader cannot measure
+/// an SVG, so it returns one as a picture without data; the writer writes a
+/// picture without data as the placeholder, so the second trip returns the
+/// placeholder where the first returned nothing. The comparison reads the
+/// placeholder as no data, on both trips. DESIGN.md §6.
+fn docx_placeholder() -> &'static str {
+    static PLACEHOLDER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PLACEHOLDER.get_or_init(|| {
+        let mut doc = DoclingDocument::new("placeholder");
+        doc.push(Node::Picture {
+            caption: None,
+            caption_href: None,
+            image: None,
+            classification: None,
+            description: None,
+            caption_parent: Default::default(),
+            caption_location: None,
+        });
+        let back = read_back(
+            Target::Docx,
+            "placeholder.docx",
+            write(Target::Docx, &doc).unwrap(),
+        )
+        .unwrap();
+        let image = back.nodes.iter().find_map(|n| {
+            if let Node::Picture { image, .. } = n {
+                image.clone()
+            } else {
+                None
+            }
+        });
+        format!(
+            "image: Some({:?})",
+            image.expect("the placeholder reads back as a picture")
+        )
+    })
 }
 
 /// The index of the `)` that closes a link destination, parentheses inside it
@@ -336,7 +411,9 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
                 Want::Tables => !table.rows.is_empty() && !one_cell(target, table),
                 Want::Pictures => table.rows.is_empty(),
             }),
-            Node::Picture { .. } => usize::from(want == Want::Pictures),
+            Node::Picture { image, .. } => {
+                usize::from(want == Want::Pictures && read_as_a_picture(target, image.as_ref()))
+            }
             // Neither a table nor a picture, in either target: written as
             // something else, or dropped by layer or by kind.
             Node::Heading { .. }
@@ -370,9 +447,13 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
 /// run merges into its neighbour, and the reader's spacing around a run
 /// depends on whether it was one. Everything but that count is compared.
 fn shape(node: &Node) -> String {
+    shape_of(&format!("{node:?}"))
+}
+
+fn shape_of(debug: &str) -> String {
     let mut out = String::new();
     let mut in_space = false;
-    for c in format!("{node:?}").chars() {
+    for c in debug.chars() {
         if c.is_whitespace() {
             if !in_space {
                 out.push(' ');
@@ -480,18 +561,30 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
         problems.push(format!("{pictures} pictures in, {pictures_back} out"));
     }
     let again = read_back(target, &name, write(target, &back)?)?;
+    let second = |node: &Node| {
+        let seen = shape(node);
+        if target == Target::Docx {
+            seen.replace(&shape_of(docx_placeholder()), "image: None")
+        } else {
+            seen
+        }
+    };
     let same = again.nodes.len() == back.nodes.len()
         && again
             .nodes
             .iter()
             .zip(&back.nodes)
-            .all(|(a, b)| shape(a) == shape(b));
-    if !same && !sparse_in_a_sheet(target, &name) && !orphan_texts_in_docx(target, &name) {
+            .all(|(a, b)| second(a) == second(b));
+    if !same
+        && !sparse_in_a_sheet(target, &name)
+        && !orphan_texts_in_docx(target, &name)
+        && !ampersand_links_in_docx(target, &name)
+    {
         let first = again
             .nodes
             .iter()
             .zip(&back.nodes)
-            .position(|(a, b)| shape(a) != shape(b))
+            .position(|(a, b)| second(a) != second(b))
             .map_or(String::from("node count differs"), |i| {
                 format!(
                     "first at node {i}: {:?} became {:?}",

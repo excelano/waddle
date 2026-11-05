@@ -479,8 +479,11 @@ set wholly in the code font with a code-like character in it is read as a
 code block, so a paragraph that is one inline code span returns as code.
 The reader's relationship parser leaves an entity in a link target
 undecoded, so the scanner decodes the entities docling writes into a
-destination and writes the character; the file is right and the second
-trip is equal. A hyperlink to a bare fragment, `#section-2`, loses its target,
+destination and writes the character, and the file is right. The reader then
+escapes the `&` of the entity it kept, so a destination with an `&` in it
+returns as `&amp;amp;` and each further trip adds an `amp;`; the corpus test
+expects the double escape in a DOCX trip and names the document whose second
+trip it bites. A hyperlink to a bare fragment, `#section-2`, loses its target,
 because the reader drops a relationship whose target starts with `#` before
 it reads the package, as docling 2.128 does, and it resolves a `w:anchor` only
 to a bookmark the document holds, which this writer does not write; the
@@ -494,6 +497,15 @@ as one cell block per run, and the reader leaves an empty DocLang-only text
 after the table for each such paragraph; written again, the blocks are
 single-run paragraphs and the second trip carries no such text. Every cell is
 the same on both trips, and the corpus test names the document this bites.
+
+docling renders a DOCX's DrawingML shapes and text boxes as SVG pictures,
+and the writer embeds the SVG as it came.
+Neither reader returns one: the ODF reader, following docling's
+`_odf_image_can_be_bitmap`, takes no `image/svg+xml` frame as a picture, and
+the DOCX reader cannot measure an SVG and returns a picture without data.
+Written again, a picture without data is the placeholder, so the DOCX second
+trip has the placeholder where the first had nothing. The corpus test counts
+no SVG picture for ODT or ODP, and compares a DOCX placeholder as no data.
 
 A list text, the paragraph the AsciiDoc reader hangs in a list, returns as a
 paragraph. DocLang reads it as one, so the DocLang is unchanged; docling's

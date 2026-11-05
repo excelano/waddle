@@ -876,7 +876,8 @@ fn docx_tables_pictures_code_and_checkboxes() {
     assert_eq!(
         back.nodes[4],
         Node::Code {
-            language: None,
+            // The reader guesses the language from the code.
+            language: Some("Rust".into()),
             text: "fn main() {\n    println!(\"hi\");\n}".into(),
             orig: None,
             pretty: None
