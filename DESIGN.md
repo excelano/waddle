@@ -91,7 +91,8 @@ nodes. §6 records where that is impossible because the reader does not look.
 
 ## 3. Dependencies
 
-**`waddle-core` depends on `docling-core` alone.** The readers are the
+**`waddle-core` depends on `docling-core` and on nothing else of docling's.**
+The readers are the
 binary's concern: Duckling already holds a `DoclingDocument` and needs no
 reader, and a library whose only docling dependency is the model crate is
 the one upstream could adopt. `docling-core` carries `serde_json` and `sha2`
@@ -110,6 +111,15 @@ oniguruma, so it satisfies `~/notes/pure_rust_preference.md` without an
 exception, and
 `waddle-core` must keep it that way: a change that adds a C dependency is a
 decision to take with David, not a cargo add.
+
+`resvg`, the SVG renderer docling.rs itself uses, draws the PNG a DOCX
+picture carries in front of an SVG (§5), behind the `svg-fallback` feature,
+which is on by default. It is taken at docling.rs's version with `text` and
+`system-fonts` alone, so it draws labels in the system's fonts and carries no
+memory-mapped fonts, compressed SVG or raster decoders; it is pure Rust and
+`waddle-core` still builds for `wasm32-unknown-unknown` with it. A caller that
+wants no renderer turns the feature off, and an SVG picture is then written
+as it came.
 
 `zip` assembles the package, without its default features, which pull
 zstd, xz and bzip2, and with the zlib-rs deflate backend, which is Rust.
@@ -268,7 +278,7 @@ not repeated.
 | CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
 | Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
-| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
+| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; an SVG picture is a PNG drawn from it at twice 96 dpi for its size on the page, as the blip every reader draws, with the SVG attached through Word's `asvg:svgBlip` extension, which Word 2016 and later draw instead, and the reader, which cannot measure an SVG, reads the PNG; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
 | Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
 | Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading |
@@ -500,14 +510,16 @@ after the table for each such paragraph; written again, the blocks are
 single-run paragraphs and the second trip carries no such text. Every cell is
 the same on both trips, and the corpus test names the document this bites.
 
-docling renders a DOCX's DrawingML shapes and text boxes as SVG pictures,
-and the writer embeds the SVG as it came.
-Neither reader returns one: the ODF reader, following docling's
-`_odf_image_can_be_bitmap`, takes no `image/svg+xml` frame as a picture, and
-the DOCX reader cannot measure an SVG and returns a picture without data.
-Written again, a picture without data is the placeholder, so the DOCX second
-trip has the placeholder where the first had nothing. The corpus test counts
-no SVG picture for ODT or ODP, and compares a DOCX placeholder as no data.
+docling renders a DOCX's DrawingML shapes and text boxes as SVG pictures.
+The ODF reader, following docling's `_odf_image_can_be_bitmap`, takes no
+`image/svg+xml` frame as a picture, so ODT and ODP write the SVG as it came
+and it does not return; the corpus test counts no SVG picture for those
+targets. The DOCX reader cannot measure an SVG, and returns the PNG the
+writer puts in front of it (§5), so an SVG picture returns from DOCX as a PNG
+and the corpus test checks that every picture returns with data. Built
+without `svg-fallback`, the DOCX writer embeds the SVG alone and the reader
+returns a picture without data; written again, that is the placeholder, so the
+corpus test compares a DOCX placeholder as no data.
 
 A list text, the paragraph the AsciiDoc reader hangs in a list, returns as a
 paragraph. DocLang reads it as one, so the DocLang is unchanged; docling's

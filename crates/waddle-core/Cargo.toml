@@ -11,9 +11,16 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["svg-fallback"]
+# A PNG beside each SVG picture in DOCX (DESIGN.md §5). Pure Rust; off, an SVG
+# picture is written as it came.
+svg-fallback = ["dep:resvg"]
+
 [dependencies]
 docling-core.workspace = true
 zip.workspace = true
+resvg = { workspace = true, optional = true }
 
 [dev-dependencies]
 # The round trip: write a package, read it back with docling.rs's own reader.

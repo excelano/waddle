@@ -22,6 +22,10 @@ clap = { version = "4.6", features = ["derive"] }
 # Package assembly. Defaults pull zstd, xz and bzip2; an office package only
 # ever stores or deflates, and the zlib-rs backend is pure Rust.
 zip = { version = "9.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The PNG a DOCX picture carries beside an SVG, for Word before 2016 and other
+# readers without SVG. The version docling.rs's own SVG rasterizer uses, with
+# text drawn in the system's fonts and nothing else.
+resvg = { version = "0.48", default-features = false, features = ["text", "system-fonts"] }
 # docling.rs's readers, for the binary's input and for the library's
 # round-trip tests. Without default features it is the pure-Rust declarative
 # converters and nothing that compiles C.

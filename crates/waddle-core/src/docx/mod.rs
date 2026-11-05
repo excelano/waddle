@@ -557,6 +557,37 @@ impl Writer {
                 ("image/png", PLACEHOLDER_PNG, PLACEHOLDER_SIZE_IN)
             }
         };
+        let (rid, index, extension, svg) =
+            match fallback_png(media_type, bytes, (width_in, height_in)) {
+                Some(png) => {
+                    let (rid, index, extension) = self.media_part("image/png", &png);
+                    let (svg_rid, ..) = self.media_part(media_type, bytes);
+                    (rid, index, extension, Some(svg_rid))
+                }
+                None => {
+                    let (rid, index, extension) = self.media_part(media_type, bytes);
+                    (rid, index, extension, None)
+                }
+            };
+        // Word's own form for a vector picture: the PNG is the blip every
+        // reader draws, and Word 2016 and later draw the SVG it carries.
+        let blip = match svg {
+            Some(svg_rid) => format!(
+                "<a:blip r:embed=\"{rid}\"><a:extLst><a:ext uri=\"{{96DAC541-7B7A-43D3-8B79-37D633B846F1}}\"><asvg:svgBlip xmlns:asvg=\"http://schemas.microsoft.com/office/drawing/2016/SVG/main\" r:embed=\"{svg_rid}\"/></a:ext></a:extLst></a:blip>"
+            ),
+            None => format!("<a:blip r:embed=\"{rid}\"/>"),
+        };
+        let cx = (width_in * EMU_PER_INCH).round() as u64;
+        let cy = (height_in * EMU_PER_INCH).round() as u64;
+        let descr = alt.map_or(String::new(), |a| format!(" descr=\"{}\"", xml::attr(a)));
+        self.body.push_str(&format!(
+            "<w:p><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{index}\" name=\"Picture {index}\"{descr}/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"{index}\" name=\"image{index}.{extension}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill>{blip}<a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\n"
+        ));
+    }
+
+    /// A media part with its relationship: the relationship id, the part's
+    /// number and its extension.
+    fn media_part(&mut self, media_type: &str, bytes: &[u8]) -> (String, usize, &'static str) {
         let index = self.media.len() + 1;
         let extension = media::extension(media_type);
         let part = format!("word/media/image{index}.{extension}");
@@ -567,13 +598,7 @@ impl Writer {
             bytes: bytes.to_vec(),
         });
         self.rels.push(Rel::Image(part));
-        let rid = rel_id(self.rels.len() - 1);
-        let cx = (width_in * EMU_PER_INCH).round() as u64;
-        let cy = (height_in * EMU_PER_INCH).round() as u64;
-        let descr = alt.map_or(String::new(), |a| format!(" descr=\"{}\"", xml::attr(a)));
-        self.body.push_str(&format!(
-            "<w:p><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{index}\" name=\"Picture {index}\"{descr}/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"{index}\" name=\"image{index}.{extension}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\"{rid}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\n"
-        ));
+        (rel_id(self.rels.len() - 1), index, extension)
     }
 
     /// The runs of one paragraph, after the bookmarks waiting for it.
@@ -686,6 +711,20 @@ impl Writer {
         }
         self.body.push_str("</w:r>");
     }
+}
+
+/// The PNG to show in place of an SVG picture, when the feature that draws
+/// one is built in and the SVG draws.
+#[cfg(feature = "svg-fallback")]
+fn fallback_png(media_type: &str, bytes: &[u8], size_in: (f64, f64)) -> Option<Vec<u8>> {
+    (media_type == "image/svg+xml")
+        .then(|| media::svg_to_png(bytes, size_in))
+        .flatten()
+}
+
+#[cfg(not(feature = "svg-fallback"))]
+fn fallback_png(_: &str, _: &[u8], _: (f64, f64)) -> Option<Vec<u8>> {
+    None
 }
 
 /// The id of the n-th relationship beyond the two fixed ones.

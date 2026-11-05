@@ -590,6 +590,51 @@ fn pictures_with_and_without_bytes_come_back_as_pictures() {
 
 /// A picture of the placeholder the writer embeds, which is a valid 16 by 12
 /// PNG, taken from the writer's own output to serve as real bytes.
+/// An SVG picture, the form docling's DOCX reader gives a DrawingML shape,
+/// goes into DOCX as a PNG blip carrying the SVG through Word's `svgBlip`
+/// extension, so the reader, which cannot measure an SVG, returns a PNG.
+#[cfg(feature = "svg-fallback")]
+#[test]
+fn docx_writes_an_svg_picture_with_a_png_in_front() {
+    let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="180" height="80" fill="#4a90d9" stroke="#000"/><text x="100" y="58" font-family="Calibri, Arial, Helvetica, sans-serif" font-size="20" text-anchor="middle">Start</text></svg>"##;
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Picture {
+        caption: None,
+        caption_href: None,
+        image: Some(docling_core::PictureImage {
+            mimetype: "image/svg+xml".into(),
+            width: 200,
+            height: 100,
+            data: svg.to_vec(),
+            dpi: docling_core::PictureImage::DEFAULT_DPI,
+            display_size: None,
+        }),
+        classification: None,
+        description: None,
+        caption_parent: CaptionParent::Body,
+        caption_location: None,
+    });
+    let (back, out) = docx_trip(&doc);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let image = back
+        .nodes
+        .iter()
+        .find_map(|n| match n {
+            Node::Picture { image, .. } => image.clone(),
+            _ => None,
+        })
+        .expect("a picture with data");
+    assert_eq!(image.mimetype, "image/png");
+    assert_eq!((image.width, image.height), (400, 200));
+    let xml = package_part(&out.bytes, "word/document.xml");
+    assert!(xml.contains("<a:blip r:embed=\"rId3\"><a:extLst><a:ext uri=\"{96DAC541-7B7A-43D3-8B79-37D633B846F1}\"><asvg:svgBlip"));
+    assert!(xml.contains("r:embed=\"rId4\"/></a:ext></a:extLst></a:blip>"));
+    assert_eq!(
+        package_part(&out.bytes, "word/media/image2.svg").as_bytes(),
+        svg
+    );
+}
+
 fn png_picture(display_size: Option<[f32; 2]>) -> Node {
     let mut doc = DoclingDocument::new("t");
     doc.push(Node::Picture {

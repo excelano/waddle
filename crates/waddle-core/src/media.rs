@@ -45,6 +45,99 @@ pub fn fit(image: &PictureImage) -> (f64, f64) {
     }
 }
 
+/// An SVG drawn as a PNG at twice 96 dpi for its size on the page, in the
+/// system's fonts, loaded once. `None` when the SVG does not parse or draws
+/// at no size.
+#[cfg(feature = "svg-fallback")]
+pub fn svg_to_png(svg: &[u8], (width_in, height_in): (f64, f64)) -> Option<Vec<u8>> {
+    use resvg::{tiny_skia, usvg};
+    use std::sync::{Arc, OnceLock};
+
+    static FONTS: OnceLock<(Arc<usvg::fontdb::Database>, String)> = OnceLock::new();
+    let (fonts, serif) = FONTS.get_or_init(system_fonts);
+    let options = usvg::Options {
+        fontdb: Arc::clone(fonts),
+        font_family: serif.clone(),
+        ..usvg::Options::default()
+    };
+    let tree = usvg::Tree::from_data(svg, &options).ok()?;
+    let width = (width_in * 192.0).round() as u32;
+    let height = (height_in * 192.0).round() as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(width.max(1), height.max(1))?;
+    let size = tree.size();
+    let transform = tiny_skia::Transform::from_scale(
+        pixmap.width() as f32 / size.width(),
+        pixmap.height() as f32 / size.height(),
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    pixmap.encode_png().ok()
+}
+
+/// The system's fonts, with each generic family pointed at a face the
+/// system has: fontdb names Arial and Times New Roman whether or not they are
+/// installed, and an SVG's `sans-serif` then draws nothing. The face for an
+/// SVG that names no family is the serif one, as a browser's is.
+#[cfg(feature = "svg-fallback")]
+fn system_fonts() -> (std::sync::Arc<resvg::usvg::fontdb::Database>, String) {
+    use resvg::usvg::fontdb::{Database, Family, Query};
+
+    let mut db = Database::new();
+    db.load_system_fonts();
+    let first = |db: &Database, names: &[&str]| {
+        names
+            .iter()
+            .find(|name| {
+                db.query(&Query {
+                    families: &[Family::Name(name)],
+                    ..Query::default()
+                })
+                .is_some()
+            })
+            .map(|name| (*name).to_owned())
+    };
+    let sans = first(
+        &db,
+        &[
+            "Arial",
+            "Liberation Sans",
+            "Helvetica",
+            "DejaVu Sans",
+            "Noto Sans",
+        ],
+    );
+    let serif = first(
+        &db,
+        &[
+            "Times New Roman",
+            "Liberation Serif",
+            "DejaVu Serif",
+            "Noto Serif",
+        ],
+    );
+    let mono = first(
+        &db,
+        &[
+            "Courier New",
+            "Liberation Mono",
+            "DejaVu Sans Mono",
+            "Noto Sans Mono",
+        ],
+    );
+    if let Some(name) = &sans {
+        db.set_sans_serif_family(name);
+    }
+    if let Some(name) = &serif {
+        db.set_serif_family(name);
+    }
+    if let Some(name) = &mono {
+        db.set_monospace_family(name);
+    }
+    let default = serif
+        .or(sans)
+        .unwrap_or_else(|| "Times New Roman".to_owned());
+    (std::sync::Arc::new(db), default)
+}
+
 /// The file extension for a media type. The DOCX reader names the media
 /// type from the extension, so this is the one it will read back.
 pub fn extension(media_type: &str) -> &'static str {

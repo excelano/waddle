@@ -315,6 +315,12 @@ fn ampersand_links_in_docx(target: Target, name: &str) -> bool {
     target == Target::Docx && AMPERSAND_LINKS_IN_DOCX.contains(&name)
 }
 
+/// Whether every picture with data returns with data: in DOCX, only when the
+/// writer draws a PNG for each SVG.
+fn svg_comes_back(target: Target) -> bool {
+    target != Target::Docx || cfg!(feature = "svg-fallback")
+}
+
 /// Whether the target's reader can return this picture as a picture at all.
 /// The ODF reader, following docling's `_odf_image_can_be_bitmap`, takes no
 /// `image/svg+xml` frame as a picture, and docling 2.53 and later render a
@@ -325,7 +331,8 @@ fn read_as_a_picture(target: Target, image: Option<&docling_core::PictureImage>)
 }
 
 /// The placeholder as the DOCX reader returns it. That reader cannot measure
-/// an SVG, so it returns one as a picture without data; the writer writes a
+/// an SVG, so built without `svg-fallback`, which puts a PNG in front of one,
+/// it returns an SVG picture as a picture without data; the writer writes a
 /// picture without data as the placeholder, so the second trip returns the
 /// placeholder where the first returned nothing. The comparison reads the
 /// placeholder as no data, on both trips. DESIGN.md §6.
@@ -387,12 +394,13 @@ fn keeps_prose(target: Target) -> bool {
     }
 }
 
-/// What a trip counts: the nodes the writer turns into a table, and the
-/// nodes it turns into a picture.
+/// What a trip counts: the nodes the writer turns into a table, the nodes
+/// it turns into a picture, and the pictures that carry data.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Want {
     Tables,
     Pictures,
+    PicturesWithData,
 }
 
 /// The DOCX reader unwraps a one-cell table into its content by design
@@ -427,10 +435,15 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             Node::Chart { table, .. } => usize::from(match want {
                 Want::Tables => !table.rows.is_empty() && !one_cell(target, table),
                 Want::Pictures => table.rows.is_empty(),
+                Want::PicturesWithData => false,
             }),
-            Node::Picture { image, .. } => {
-                usize::from(want == Want::Pictures && read_as_a_picture(target, image.as_ref()))
-            }
+            Node::Picture { image, .. } => usize::from(match want {
+                Want::Tables => false,
+                Want::Pictures => read_as_a_picture(target, image.as_ref()),
+                Want::PicturesWithData => {
+                    image.is_some() && read_as_a_picture(target, image.as_ref())
+                }
+            }),
             // Neither a table nor a picture, in either target: written as
             // something else, or dropped by layer or by kind.
             Node::Heading { .. }
@@ -577,6 +590,16 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     );
     if pictures != pictures_back && keeps_prose(target) {
         problems.push(format!("{pictures} pictures in, {pictures_back} out"));
+    }
+    // Every picture is written with bytes, its own or the placeholder's, so
+    // every picture comes back with data; an SVG does from DOCX only through
+    // the PNG the writer puts in front of it.
+    let with_data_back = count(&back.nodes, Want::PicturesWithData, target);
+    if with_data_back != pictures_back && keeps_prose(target) && svg_comes_back(target) {
+        problems.push(format!(
+            "{} of {pictures_back} pictures came back without data",
+            pictures_back - with_data_back
+        ));
     }
     let again = read_back(target, &name, write(target, &back)?)?;
     let second = |node: &Node| {
