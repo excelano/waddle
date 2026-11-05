@@ -61,6 +61,19 @@ pub fn plain(text: &str) -> Run {
 }
 
 /// Whether the runs hold no visible text.
+pub fn heading_identifier(runs: &[Run], taken: &mut std::collections::HashSet<String>) -> String {
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let base = docling_core::pandoc::auto_identifier(&text);
+    let mut id = base.clone();
+    let mut n = 0;
+    while taken.contains(&id) {
+        n += 1;
+        id = format!("{base}-{n}");
+    }
+    taken.insert(id.clone());
+    id
+}
+
 pub fn is_blank(runs: &[Run]) -> bool {
     runs.iter().all(|r| r.text.trim().is_empty())
 }

@@ -262,7 +262,7 @@ level 1 would read back one level deeper than it went in.
 | Furniture, FurnitureText, PageFurniture, CommentSection, PageInfo | dropped |
 | KeyValueGraph | dropped with a warning; only docling's JSON carries the graph and no office format has a construct for it |
 | PictureChildren | dropped without a warning; the text inside a PDF picture is JSON-only in every serializer docling.rs has, and the picture itself is written |
-| Anchor | `text:bookmark text:name` at the start of the next paragraph with text, which is where docling's JSON builder hands an anchor; one with no text after it is dropped. A link to `#id` is a `text:a` like any other, and the bookmark is what it lands on in Writer |
+| Anchor | `text:bookmark text:name` at the start of the next paragraph with text, which is where docling's JSON builder hands an anchor; one with no text after it is dropped. A link to `#id` is a `text:a` like any other, and the bookmark is what it lands on in Writer. Every heading carries a bookmark named with the Pandoc identifier of its text, as in DOCX |
 
 ### DOCX
 
@@ -281,7 +281,7 @@ not repeated.
 | Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; an SVG picture is a PNG drawn from it at twice 96 dpi for its size on the page, as the blip every reader draws, with the SVG attached through Word's `asvg:svgBlip` extension, which Word 2016 and later draw instead, and the reader, which cannot measure an SVG, reads the PNG; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
 | Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
-| Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading |
+| Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading. Every heading also carries a bookmark named with the Pandoc identifier of its text, numbered `-1`, `-2` on a repeat as Pandoc does, so a link to a heading's generated identifier resolves |
 
 Style names avoid `heading`, `title` and `code` except where they mean it:
 the reader reads a style called `TableHeading` as a heading. The stock
@@ -494,12 +494,12 @@ destination and writes the character, and the file is right. The reader then
 escapes the `&` of the entity it kept, so a destination with an `&` in it
 returns as `&amp;amp;` and each further trip adds an `amp;`; the corpus test
 expects the double escape in a DOCX trip and names the document whose second
-trip it bites. A hyperlink to a bare fragment, `#section-2`, keeps its target only when the
-document holds the anchor it names: the writer writes it as `w:anchor`, and
-the reader resolves a `w:anchor` only to a bookmark the document holds. A
-Markdown or HTML source links to a heading's generated identifier, which no
-anchor node carries, so such a link comes back as its text, and the corpus
-test compares a DOCX trip with fragment-only link destinations removed from
+trip it bites. A hyperlink to a bare fragment, `#section-2`, keeps its target when the
+document holds what it names, an anchor or a heading whose Pandoc identifier
+it is: the writer writes the link as `w:anchor` and a bookmark for each
+anchor and each heading, and the reader resolves a `w:anchor` only to a
+bookmark the document holds. Any other fragment link comes back as its text,
+and the corpus test compares a DOCX trip with those destinations removed from
 the source. A heading or title
 returns as plain text, as docling's `paragraph.text` gives it, so every link in
 one comes back as its text alone, and the corpus test removes a heading's link

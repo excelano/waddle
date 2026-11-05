@@ -136,10 +136,13 @@ impl From<String> for Piece {
 fn body_text(nodes: &[Node], out: &mut Vec<Piece>, anchors: &mut HashSet<String>) {
     for node in nodes {
         match node {
-            Node::Heading { text, .. } => out.push(Piece {
-                text: text.clone(),
-                heading: true,
-            }),
+            Node::Heading { text, .. } => {
+                waddle_core::heading_identifier(text, anchors);
+                out.push(Piece {
+                    text: text.clone(),
+                    heading: true,
+                })
+            }
             Node::Paragraph { text }
             | Node::ListText { text, .. }
             | Node::CheckboxItem { text, .. } => out.push(text.clone().into()),

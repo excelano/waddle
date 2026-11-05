@@ -392,6 +392,24 @@ fn an_internal_link_comes_back_with_its_bookmark() {
     );
 }
 
+#[test]
+fn a_link_to_a_headings_generated_identifier_comes_back() {
+    let mut doc = DoclingDocument::new("t");
+    doc.add_paragraph("See [the target](#target-section) below.");
+    doc.add_heading(2, "Target section");
+    doc.add_paragraph("Body.");
+    for target in [Target::Odt, Target::Docx] {
+        let (back, out) = trip(target, &doc);
+        assert!(out.warnings.is_empty(), "{target:?}: {:?}", out.warnings);
+        assert!(
+            back.export_to_markdown()
+                .contains("[the target](#target-section)"),
+            "{target:?}: {}",
+            back.export_to_markdown()
+        );
+    }
+}
+
 fn package_part(bytes: &[u8], name: &str) -> String {
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
     let mut part = String::new();

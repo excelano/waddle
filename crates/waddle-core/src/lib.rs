@@ -38,3 +38,11 @@ pub use docling_core::{DoclingDocument, Node};
 pub use error::Error;
 pub use report::{Output, Reason, Warning};
 pub use target::Target;
+
+pub fn heading_identifier(
+    markdown: &str,
+    taken: &mut std::collections::HashSet<String>,
+) -> Option<String> {
+    let runs = inline::collapse_spaces(inline::from_markdown(markdown));
+    (!inline::is_blank(&runs)).then(|| inline::heading_identifier(&runs, taken))
+}

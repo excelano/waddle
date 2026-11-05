@@ -137,6 +137,7 @@ pub(super) struct Writer {
     /// where the reader looks for a bookmark and where docling's JSON
     /// builder hands an anchor.
     bookmarks: Vec<String>,
+    bookmark_names: std::collections::HashSet<String>,
     /// Bookmarks written, for each one's `w:id`.
     bookmarks_written: usize,
     warnings: Vec<Warning>,
@@ -351,7 +352,10 @@ impl Writer {
             Node::PageBreak => self
                 .body
                 .push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n"),
-            Node::Anchor { id } => self.bookmarks.push(id.clone()),
+            Node::Anchor { id } => {
+                self.bookmark_names.insert(id.clone());
+                self.bookmarks.push(id.clone());
+            }
             // Page geometry has no content to carry and is not worth a warning,
             // and the text inside a picture is JSON-only in every other
             // serializer.
@@ -368,6 +372,8 @@ impl Writer {
         if is_blank(runs) {
             return;
         }
+        let id = inline::heading_identifier(runs, &mut self.bookmark_names);
+        self.bookmarks.push(id);
         if level <= 1 {
             self.paragraph(Some("Title"), runs, false);
             return;
@@ -823,10 +829,10 @@ mod tests {
         doc.add_heading(12, "Deep");
         let body = body_of(&doc);
         assert!(body.contains(
-            r#"<w:pStyle w:val="Title"/></w:pPr><w:r><w:t xml:space="preserve">Report</w:t>"#
+            r#"<w:pStyle w:val="Title"/></w:pPr><w:bookmarkStart w:id="0" w:name="report"/><w:bookmarkEnd w:id="0"/><w:r><w:t xml:space="preserve">Report</w:t>"#
         ));
         assert!(body.contains(
-            r#"<w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t xml:space="preserve">Intro</w:t>"#
+            r#"<w:pStyle w:val="Heading1"/></w:pPr><w:bookmarkStart w:id="1" w:name="intro"/><w:bookmarkEnd w:id="1"/><w:r><w:t xml:space="preserve">Intro</w:t>"#
         ));
         assert!(body.contains(r#"<w:pStyle w:val="Heading9"/>"#));
     }

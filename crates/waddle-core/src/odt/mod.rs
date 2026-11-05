@@ -164,6 +164,7 @@ pub(super) struct Writer {
     tables: usize,
     /// Link destinations waiting for the next paragraph with text.
     bookmarks: Vec<String>,
+    bookmark_names: std::collections::HashSet<String>,
     warnings: Vec<Warning>,
 }
 
@@ -336,7 +337,10 @@ impl Writer {
                 self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
             }
             Node::PageBreak => self.body.push_str("<text:p text:style-name=\"Pbreak\"/>\n"),
-            Node::Anchor { id } => self.bookmarks.push(id.clone()),
+            Node::Anchor { id } => {
+                self.bookmark_names.insert(id.clone());
+                self.bookmarks.push(id.clone());
+            }
             // Page geometry has no content to carry and is not worth a warning,
             // and the text inside a picture is JSON-only in every other
             // serializer.
@@ -353,6 +357,8 @@ impl Writer {
         if is_blank(runs) {
             return;
         }
+        let id = inline::heading_identifier(runs, &mut self.bookmark_names);
+        self.bookmarks.push(id);
         if level <= 1 {
             self.paragraph("Title", runs);
             return;
@@ -661,9 +667,11 @@ mod tests {
         doc.add_heading(1, "Report");
         doc.add_heading(2, "Intro");
         let xml = content_of(&doc);
-        assert!(xml.contains(r#"<text:p text:style-name="Title">Report</text:p>"#));
         assert!(xml.contains(
-            r#"<text:h text:style-name="Heading_20_1" text:outline-level="1">Intro</text:h>"#
+            r#"<text:p text:style-name="Title"><text:bookmark text:name="report"/>Report</text:p>"#
+        ));
+        assert!(xml.contains(
+            r#"<text:h text:style-name="Heading_20_1" text:outline-level="1"><text:bookmark text:name="intro"/>Intro</text:h>"#
         ));
     }
 
