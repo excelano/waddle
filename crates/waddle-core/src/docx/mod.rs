@@ -133,6 +133,12 @@ pub(super) struct Writer {
     /// Inside a table cell, where only run formatting keeps a cell rich in
     /// the reader and only a rich cell keeps its links.
     in_cell: bool,
+    /// Link destinations waiting for the next paragraph with text, which is
+    /// where the reader looks for a bookmark and where docling's JSON
+    /// builder hands an anchor.
+    bookmarks: Vec<String>,
+    /// Bookmarks written, for each one's `w:id`.
+    bookmarks_written: usize,
     warnings: Vec<Warning>,
 }
 
@@ -345,10 +351,11 @@ impl Writer {
             Node::PageBreak => self
                 .body
                 .push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n"),
+            Node::Anchor { id } => self.bookmarks.push(id.clone()),
             // Page geometry has no content to carry and is not worth a warning,
-            // and a link destination and the text inside a picture are JSON-only
-            // in every other serializer.
-            Node::PageInfo { .. } | Node::Anchor { .. } | Node::PictureChildren(_) => {}
+            // and the text inside a picture is JSON-only in every other
+            // serializer.
+            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
             Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
@@ -569,9 +576,17 @@ impl Writer {
         ));
     }
 
-    /// The runs of one paragraph. Consecutive runs with the same link share
-    /// one `w:hyperlink`.
+    /// The runs of one paragraph, after the bookmarks waiting for it.
+    /// Consecutive runs with the same link share one `w:hyperlink`.
     pub(super) fn runs(&mut self, runs: &[Run]) {
+        for name in std::mem::take(&mut self.bookmarks) {
+            let id = self.bookmarks_written;
+            self.bookmarks_written += 1;
+            self.body.push_str(&format!(
+                "<w:bookmarkStart w:id=\"{id}\" w:name=\"{}\"/><w:bookmarkEnd w:id=\"{id}\"/>",
+                xml::attr(&name)
+            ));
+        }
         let runs = merge_adjacent(outside_links(runs));
         let mut open_href: Option<&str> = None;
         for run in &runs {
@@ -589,8 +604,18 @@ impl Writer {
                         self.body
                             .push_str("<w:r><w:rPr><w:u w:val=\"single\"/></w:rPr></w:r>");
                     }
-                    let rid = self.hyperlink(href);
-                    self.body.push_str(&format!("<w:hyperlink r:id=\"{rid}\">"));
+                    // A link into the document names its bookmark; the
+                    // reader resolves `w:anchor` and drops a relationship
+                    // whose target starts with `#`.
+                    match href.strip_prefix('#').filter(|id| !id.is_empty()) {
+                        Some(id) => self
+                            .body
+                            .push_str(&format!("<w:hyperlink w:anchor=\"{}\">", xml::attr(id))),
+                        None => {
+                            let rid = self.hyperlink(href);
+                            self.body.push_str(&format!("<w:hyperlink r:id=\"{rid}\">"));
+                        }
+                    }
                 }
             }
             self.run(run);

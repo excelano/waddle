@@ -162,6 +162,8 @@ pub(super) struct Writer {
     lists: Vec<ListStyle>,
     pictures: Vec<Picture>,
     tables: usize,
+    /// Link destinations waiting for the next paragraph with text.
+    bookmarks: Vec<String>,
     warnings: Vec<Warning>,
 }
 
@@ -334,10 +336,11 @@ impl Writer {
                 self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))
             }
             Node::PageBreak => self.body.push_str("<text:p text:style-name=\"Pbreak\"/>\n"),
+            Node::Anchor { id } => self.bookmarks.push(id.clone()),
             // Page geometry has no content to carry and is not worth a warning,
-            // and a link destination and the text inside a picture are JSON-only
-            // in every other serializer.
-            Node::PageInfo { .. } | Node::Anchor { .. } | Node::PictureChildren(_) => {}
+            // and the text inside a picture is JSON-only in every other
+            // serializer.
+            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
             Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
@@ -502,9 +505,15 @@ impl Writer {
         ));
     }
 
-    /// The runs of one paragraph. Consecutive runs with the same link share
-    /// one `text:a`.
+    /// The runs of one paragraph, after the bookmarks waiting for it.
+    /// Consecutive runs with the same link share one `text:a`.
     pub(super) fn runs(&mut self, runs: &[Run]) {
+        for name in std::mem::take(&mut self.bookmarks) {
+            self.body.push_str(&format!(
+                "<text:bookmark text:name=\"{}\"/>",
+                xml::attr(&name)
+            ));
+        }
         let runs = merge_adjacent(outside_links(runs));
         let mut at_start = true;
         let mut open_href: Option<&str> = None;

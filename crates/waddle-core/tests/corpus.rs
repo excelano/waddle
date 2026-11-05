@@ -16,6 +16,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -130,7 +131,9 @@ impl From<String> for Piece {
 }
 
 /// The body text pieces a reader must give back: everything a person reads.
-fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
+/// The body's text pieces into `out`, and the ids of its anchors into
+/// `anchors`.
+fn body_text(nodes: &[Node], out: &mut Vec<Piece>, anchors: &mut HashSet<String>) {
     for node in nodes {
         match node {
             Node::Heading { text, .. } => out.push(Piece {
@@ -159,10 +162,10 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
             // merged cell's blocks live on its anchor, the position it starts
             // at, and every position it covers reads them there.
             Node::Table(table) | Node::Chart { table, .. } => {
-                let anchors = table.span_anchors();
+                let span_anchors = table.span_anchors();
                 for (r, row) in table.rows.iter().enumerate() {
                     for (c, text) in row.iter().enumerate() {
-                        let (ar, ac) = anchors[r][c];
+                        let (ar, ac) = span_anchors[r][c];
                         match table
                             .cell_blocks
                             .as_ref()
@@ -170,7 +173,7 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
                             .and_then(|row| row.get(ac))
                             .filter(|blocks| !blocks.is_empty())
                         {
-                            Some(blocks) => body_text(blocks, out),
+                            Some(blocks) => body_text(blocks, out, anchors),
                             None => out.push(text.clone().into()),
                         }
                     }
@@ -189,12 +192,12 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
                 layer: None,
                 children,
                 ..
-            } => body_text(children, out),
+            } => body_text(children, out, anchors),
             Node::Located { inner, .. }
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::Track { inner, .. }
-            | Node::DoclangOnly(inner) => body_text(std::slice::from_ref(inner), out),
+            | Node::DoclangOnly(inner) => body_text(std::slice::from_ref(inner), out, anchors),
             // Written, but not as text this comparison can follow: a
             // formula becomes its source in a code paragraph, a field
             // region a table of its items, a text dump a run of paragraphs.
@@ -211,7 +214,10 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>) {
             | Node::PictureChildren(_)
             | Node::PageInfo { .. } => {}
             // No text of its own.
-            Node::PageBreak | Node::Anchor { .. } => {}
+            Node::Anchor { id } => {
+                anchors.insert(id.clone());
+            }
+            Node::PageBreak => {}
         }
     }
 }
@@ -250,11 +256,12 @@ fn orphan_texts_in_docx(target: Target, name: &str) -> bool {
 
 /// A source piece as the target's reader can return it. The DOCX reader
 /// returns a heading as plain text, so every link in one comes back as its
-/// text alone, and it drops a hyperlink relationship whose target is a bare
-/// fragment, as docling 2.128 does, so an internal link does too. It writes
+/// text alone, and it resolves a link to a bare fragment only through a
+/// bookmark, which the writer writes for each of the document's anchors, so
+/// an internal link to anything else comes back as its text. It writes
 /// each `&` of a link destination as `&amp;amp;`, escaping it twice where the
 /// ODF reader writes it as it is. DESIGN.md §6.
-fn as_the_reader_returns(target: Target, piece: &Piece) -> String {
+fn as_the_reader_returns(target: Target, piece: &Piece, anchors: &HashSet<String>) -> String {
     if target != Target::Docx {
         return piece.text.clone();
     }
@@ -262,11 +269,21 @@ fn as_the_reader_returns(target: Target, piece: &Piece) -> String {
     let mut out = String::new();
     let mut rest = piece.text.as_str();
     while let Some(at) = rest.find(opener) {
-        out.push_str(&rest[..=at]);
-        match destination_end(&rest[at + 2..]) {
-            Some(end) => rest = &rest[at + 2 + end + 1..],
-            None => return out,
+        let Some(end) = destination_end(&rest[at + 2..]) else {
+            out.push_str(&rest[..=at]);
+            return out;
+        };
+        let destination = &rest[at + 2..at + 2 + end];
+        let bookmarked = !piece.heading
+            && destination
+                .strip_prefix('#')
+                .is_some_and(|id| anchors.contains(id));
+        if bookmarked {
+            out.push_str(&rest[..at + 2 + end + 1]);
+        } else {
+            out.push_str(&rest[..=at]);
         }
+        rest = &rest[at + 2 + end + 1..];
     }
     out.push_str(rest);
     escaped_twice_in_destinations(&out)
@@ -516,9 +533,10 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     let back = read_back(target, &name, bytes)?;
 
     let mut pieces = Vec::new();
-    body_text(&doc.nodes, &mut pieces);
+    let mut anchors = HashSet::new();
+    body_text(&doc.nodes, &mut pieces, &mut anchors);
     let mut back_pieces = Vec::new();
-    body_text(&back.nodes, &mut back_pieces);
+    body_text(&back.nodes, &mut back_pieces, &mut HashSet::new());
     let haystack = words(
         &back_pieces
             .iter()
@@ -529,7 +547,7 @@ fn check(target: Target, path: &std::path::Path) -> Result<(), String> {
     let missing: Vec<&Piece> = pieces
         .iter()
         .filter(|p| {
-            let w = words(&as_the_reader_returns(target, p));
+            let w = words(&as_the_reader_returns(target, p, &anchors));
             !w.is_empty() && !haystack.contains(&w)
         })
         .collect();

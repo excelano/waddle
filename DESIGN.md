@@ -252,7 +252,7 @@ level 1 would read back one level deeper than it went in.
 | Furniture, FurnitureText, PageFurniture, CommentSection, PageInfo | dropped |
 | KeyValueGraph | dropped with a warning; only docling's JSON carries the graph and no office format has a construct for it |
 | PictureChildren | dropped without a warning; the text inside a PDF picture is JSON-only in every serializer docling.rs has, and the picture itself is written |
-| Anchor | dropped without a warning; a link destination, a `.doc` bookmark, is rendered by docling's JSON export alone |
+| Anchor | `text:bookmark text:name` at the start of the next paragraph with text, which is where docling's JSON builder hands an anchor; one with no text after it is dropped. A link to `#id` is a `text:a` like any other, and the bookmark is what it lands on in Writer |
 
 ### DOCX
 
@@ -263,7 +263,7 @@ not repeated.
 |---|---|
 | Heading level 1 | `w:pStyle w:val="Title"` |
 | Heading level N > 1 | `w:pStyle w:val="HeadingN-1"`, up to `Heading9`, with `styles.xml` naming it `heading N-1` and carrying `w:outlineLvl w:val="N-2"`; the reader reads all three and they agree |
-| Paragraph, InlineGroup, ListText | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`, Consolas `w:rFonts` for code); newlines as `w:br`, tabs as the character; links as `w:hyperlink r:id` with one relationship per distinct target and the `Hyperlink` character style, which the reader does not resolve; a blank paragraph is written as an empty `w:p`, because the reader returns one as an empty text node and that is how Word keeps a blank line |
+| Paragraph, InlineGroup, ListText | `w:p`; runs as `w:r` with `w:rPr` (`w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign`, Consolas `w:rFonts` for code); newlines as `w:br`, tabs as the character; links as `w:hyperlink r:id` with one relationship per distinct target and the `Hyperlink` character style, which the reader does not resolve, and a link to `#id` as `w:hyperlink w:anchor` with no relationship, which the reader resolves through the bookmark of that name; a blank paragraph is written as an empty `w:p`, because the reader returns one as an empty text node and that is how Word keeps a blank line |
 | ListItem | `w:numPr` with `w:ilvl` for the level and a `w:numId`; numbered or bullet is decided in `numbering.xml` by the level's `w:numFmt`, the only signal the reader uses; one definition per distinct vector of levels and one `w:num` per list, since the reader counts per `w:num`; a new `w:num` opens where the model says a list begins, where the kind changes at the top level, or where the count breaks, because the DOCX reader marks no item as first in its list and a jump in the number is the other sign of a new list |
 | CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
@@ -271,6 +271,7 @@ not repeated.
 | Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
 | Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
+| Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading |
 
 Style names avoid `heading`, `title` and `code` except where they mean it:
 the reader reads a style called `TableHeading` as a heading. The stock
@@ -483,12 +484,13 @@ destination and writes the character, and the file is right. The reader then
 escapes the `&` of the entity it kept, so a destination with an `&` in it
 returns as `&amp;amp;` and each further trip adds an `amp;`; the corpus test
 expects the double escape in a DOCX trip and names the document whose second
-trip it bites. A hyperlink to a bare fragment, `#section-2`, loses its target,
-because the reader drops a relationship whose target starts with `#` before
-it reads the package, as docling 2.128 does, and it resolves a `w:anchor` only
-to a bookmark the document holds, which this writer does not write; the
-link comes back as its text, and the corpus test compares a DOCX trip with
-fragment-only link destinations removed from the source. A heading or title
+trip it bites. A hyperlink to a bare fragment, `#section-2`, keeps its target only when the
+document holds the anchor it names: the writer writes it as `w:anchor`, and
+the reader resolves a `w:anchor` only to a bookmark the document holds. A
+Markdown or HTML source links to a heading's generated identifier, which no
+anchor node carries, so such a link comes back as its text, and the corpus
+test compares a DOCX trip with fragment-only link destinations removed from
+the source. A heading or title
 returns as plain text, as docling's `paragraph.text` gives it, so every link in
 one comes back as its text alone, and the corpus test removes a heading's link
 destinations before comparing it. Header rows beyond

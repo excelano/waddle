@@ -333,10 +333,11 @@ fn a_track_a_labelled_text_and_a_furniture_text_follow_docling() {
 
 /// The variants docling-core 2.49 added: a list text, the AsciiDoc reader's
 /// paragraph inside a list, is the paragraph every serializer but docling's
-/// Markdown list reads it as; an anchor, the `.doc` reader's bookmark, is
-/// JSON-only upstream and writes nothing, without a warning.
+/// Markdown list reads it as; an anchor, the `.doc` reader's bookmark, is a
+/// bookmark in the next paragraph, which adds no node on the way back and
+/// raises no warning.
 #[test]
-fn a_list_text_is_a_paragraph_and_an_anchor_writes_nothing() {
+fn a_list_text_is_a_paragraph_and_an_anchor_adds_no_node() {
     let mut doc = DoclingDocument::new("t");
     doc.add_paragraph("before");
     doc.push(Node::Anchor { id: "here".into() });
@@ -358,6 +359,44 @@ fn a_list_text_is_a_paragraph_and_an_anchor_writes_nothing() {
         );
         assert_fixed_point_for(target, &back);
     }
+}
+
+/// A `.doc` document's internal link: the anchor becomes a bookmark in the
+/// paragraph after it, and a link to `#id` points at the bookmark, so both
+/// readers return the link. DOCX resolves `w:hyperlink w:anchor` through the
+/// bookmark; ODF keeps the `xlink:href` as written.
+#[test]
+fn an_internal_link_comes_back_with_its_bookmark() {
+    let mut doc = DoclingDocument::new("t");
+    doc.push(Node::Anchor {
+        id: "target".into(),
+    });
+    doc.add_paragraph("The target paragraph.");
+    doc.add_paragraph("See [the target](#target) above.");
+    for target in [Target::Odt, Target::Docx] {
+        let (back, out) = trip(target, &doc);
+        assert!(out.warnings.is_empty(), "{target:?}: {:?}", out.warnings);
+        assert!(
+            back.export_to_markdown().contains("[the target](#target)"),
+            "{target:?}: {}",
+            back.export_to_markdown()
+        );
+    }
+    let docx = docx::write(&doc).unwrap();
+    let xml = package_part(&docx.bytes, "word/document.xml");
+    assert!(xml.contains("<w:bookmarkStart w:id=\"0\" w:name=\"target\"/>"));
+    assert!(xml.contains("<w:hyperlink w:anchor=\"target\">"));
+    let odt = odt::write(&doc).unwrap();
+    assert!(
+        package_part(&odt.bytes, "content.xml").contains("<text:bookmark text:name=\"target\"/>")
+    );
+}
+
+fn package_part(bytes: &[u8], name: &str) -> String {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut part = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name(name).unwrap(), &mut part).unwrap();
+    part
 }
 
 /// An author's alt text is the `descr` the DOCX reader reads it from; a
