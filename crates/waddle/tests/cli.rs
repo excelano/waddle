@@ -126,6 +126,28 @@ fn a_file_that_is_none_of_the_formats_is_exit_1() {
     );
 }
 
+/// An office package is a zip like a DocLang archive, and docling would read
+/// one; waddle names what it is and refuses it.
+#[test]
+fn an_office_package_given_as_input_is_exit_1() {
+    let dir = scratch("office-input");
+    let path = write_dclg(&dir);
+    for (target, said) in [
+        ("docx", "is a Word document (DOCX), not DocLang"),
+        (
+            "odt",
+            "is an OpenDocument file (application/vnd.oasis.opendocument.text), not DocLang",
+        ),
+    ] {
+        let out = waddle(&[path.to_str().unwrap(), "--to", target], None);
+        assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+        let written = dir.join(format!("ducks.{target}"));
+        let out = waddle(&[written.to_str().unwrap(), "--to", "odt"], None);
+        assert_eq!(out.status.code(), Some(1), "{}", text(&out.stderr));
+        assert!(text(&out.stderr).contains(said), "{}", text(&out.stderr));
+    }
+}
+
 #[test]
 fn bare_doclang_finds_its_assets_and_writes_beside_itself() {
     let dir = scratch("dclg");

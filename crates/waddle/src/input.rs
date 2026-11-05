@@ -82,12 +82,52 @@ pub fn read(path: &Path) -> Result<Input, String> {
     };
     let format = sniff(&bytes)
         .ok_or_else(|| format!("{what} is not DocLang, a DocLang archive or docling JSON"))?;
+    if format == Format::Dclx
+        && let Some(other) = not_an_archive(&bytes)
+    {
+        return Err(format!(
+            "{what} is {other}, not DocLang; waddle reads DocLang, a DocLang archive or docling JSON"
+        ));
+    }
     Ok(Input {
         name,
         bytes,
         format,
         base_dir,
     })
+}
+
+/// What a zip is when it is not a DocLang archive, which is one without a
+/// `document.xml`. docling would read an office package given to it as an
+/// archive under its own format, and waddle does not claim that conversion.
+fn not_an_archive(bytes: &[u8]) -> Option<String> {
+    let Ok(mut zip) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) else {
+        return Some("a zip archive that cannot be opened".to_string());
+    };
+    let has = |zip: &zip::ZipArchive<_>, name: &str| zip.index_for_name(name).is_some();
+    if has(&zip, "document.xml") {
+        return None;
+    }
+    let what = if has(&zip, "word/document.xml") {
+        "a Word document (DOCX)".to_string()
+    } else if has(&zip, "xl/workbook.xml") {
+        "an Excel workbook (XLSX)".to_string()
+    } else if has(&zip, "ppt/presentation.xml") {
+        "a PowerPoint presentation (PPTX)".to_string()
+    } else {
+        let mut mimetype = String::new();
+        let odf = zip
+            .by_name("mimetype")
+            .ok()
+            .and_then(|mut f| f.read_to_string(&mut mimetype).ok())
+            .is_some_and(|_| mimetype.starts_with("application/vnd.oasis.opendocument"));
+        if odf {
+            format!("an OpenDocument file ({})", mimetype.trim())
+        } else {
+            "a zip archive without a document.xml".to_string()
+        }
+    };
+    Some(what)
 }
 
 /// docling's reading of the input.
