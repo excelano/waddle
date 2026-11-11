@@ -5,7 +5,7 @@
 //! `-o` says. It follows the fleet's agent-facing CLI contract: exit 0 for
 //! success including a run that dropped nodes with warnings, 1 for an input
 //! it cannot read or represent, 2 for a wrong command line; `-` for stdin;
-//! colour only on a terminal.
+//! color only on a terminal.
 //!
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
@@ -32,7 +32,7 @@ Exit codes:
   1  the input could not be read, or under --strict could not be represented
   2  the command line was wrong";
 
-/// Write an ODT or DOCX from a DocLang or docling JSON document.
+/// Write an ODT, DOCX, ODS, ODP or XLSX from a DocLang or docling JSON document.
 #[derive(Parser, Debug)]
 #[command(version = skill::version(), about, after_help = EXIT_CODES)]
 struct Cli {
@@ -64,7 +64,7 @@ struct Cli {
     #[arg(long)]
     strict: bool,
 
-    /// When to colour diagnostics
+    /// When to color diagnostics
     #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
     color: ColorMode,
 }
