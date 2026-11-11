@@ -31,12 +31,12 @@ window, no ML, no reader.
 docling JSON file through docling.rs's own readers, hands the document to
 the library, and writes one package. It follows the fleet's agent-facing CLI
 contract in `~/notes/agent_cli_conventions.md`: three exit codes, `-` for
-stdin, colour only on a terminal, a first line of error text that names the
+stdin, color only on a terminal, a first line of error text that names the
 correction. It never overwrites, and it says what it will drop before it
 writes.
 
-Duckling later depends on `waddle-core` and adds the new targets to its
-output picker. Duckling's principle that it adds no conversion logic of its
+Duckling depends on `waddle-core` and offers its targets in its output
+picker. Duckling's principle that it adds no conversion logic of its
 own holds, because the conversion is this crate's. Segler is the sibling on
 the other side: convert with Duckling, review and correct with Segler,
 publish with waddle.
@@ -46,8 +46,8 @@ publish with waddle.
 
 **A separate crate, not a fork and not a pull request.** docling.rs scopes
 itself to parity with Python docling, which has no writer, and its readers
-ignore what they do not recognise by design. A writer is a different kind of
-artefact from a reader. Keeping docling-core as this library's only docling
+ignore what they do not recognize by design. A writer is a different kind of
+artifact from a reader. Keeping docling-core as this library's only docling
 dependency is what would make the capability cheap for upstream to accept.
 
 ## 2. What is being written
@@ -59,7 +59,7 @@ confidence report. `Node` is an enum. The variants that
 carry content are heading with a level, paragraph, checkbox item, list item
 with ordering, level, number and marker, code with an optional language,
 table, picture with an optional caption, optional bytes and an optional
-description, formula, chart, caption, labelled text, group, form field region,
+description, formula, chart, caption, labeled text, group, form field region,
 inline group, text dump, page furniture, furniture text, page break and page
 info. The rest are wrappers: furniture, located, commented, track, comment
 section and DocLang-only, each holding an inner node or an index.
@@ -76,7 +76,7 @@ on a picture caption, or as `[text](url)` inside a paragraph's Markdown
 string.
 
 Consequence: the writers are not the docling.rs readers run backwards. They
-are fresh serialisers from a semantic model, the same category as
+are fresh serializers from a semantic model, the same category as
 docling-core's Markdown and LaTeX exports, targeting a zipped XML package
 instead of a text file. Output is deliberately plain, the document you would
 get from a well-structured Markdown file opened in Writer or Word with a
@@ -86,7 +86,7 @@ scope because there is nothing in the model to recover it from.
 The docling.rs readers for the same formats (`crates/docling/src/backend/`
 `odf.rs`, `docx.rs`, `pptx.rs`, `xlsx.rs`) are the specification for which
 XML constructs map to which node variants. The writer emits the constructs
-the reader recognises, so that reading the output back yields the same
+the reader recognizes, so that reading the output back yields the same
 nodes. §6 records where that is impossible because the reader does not look.
 
 ## 3. Dependencies
@@ -126,7 +126,7 @@ zstd, xz and bzip2, and with the zlib-rs deflate backend, which is Rust.
 ODF requires the `mimetype` entry first and stored uncompressed, which
 `zip` supports per entry.
 
-**The XML is pushed as strings.** docling-core's own serialisers build their
+**The XML is pushed as strings.** docling-core's own serializers build their
 output as strings, the vocabulary of each package is fixed and small, and what
 an XML writer library would add over that is an escape function, which is ten
 lines in `xml.rs`. The static parts, `styles.xml` and the manifest, are
@@ -152,7 +152,7 @@ moves forward, and only after the writers handle what the new series adds.
 
 ## 4. Inputs, and what the readers leave behind
 
-The CLI's inputs are docling.rs's three lossless serialisations: bare
+The CLI's inputs are docling.rs's three lossless serializations: bare
 DocLang (`.dclg`), the DocLang archive (`.dclx`, an OPC zip with
 `document.xml`, optional `pages/N.png` and `assets/`), and docling JSON.
 All three are read by docling.rs and reach waddle as a `DoclingDocument`.
@@ -251,7 +251,7 @@ level 1 would read back one level deeper than it went in.
 | Code | one `text:p` in the `Preformatted_20_Text` style, lines as `text:line-break`, so the block returns as one paragraph with its newlines rather than one paragraph per line; the `pretty` form when the pipeline made one; the reader has no code detection, see §6 |
 | Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the leading rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; a cell with rich blocks holds them as body nodes; a plain cell is `office:value-type="string"`, which the reader reads flat, and a cell with any span or link is left untyped, which the reader reads as rich and so keeps its runs and links; header cells in the `Table_20_Heading` paragraph style, bold on the style rather than a span so it does not return as `**bold**` |
 | Table footnotes | one `text:p` each after the table, which is where docling's Markdown prints them; they return as paragraphs, not as the table's |
-| Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized at the display size the source recorded where the reader kept one, else from the pixels at 96 dpi, and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
+| Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized at the display size the source recorded where the reader kept one, else from the pixels at 96 dpi, and capped at the text width; a node without bytes gets a small gray PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
 | Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; no MathML |
 | Caption | a standalone caption, one no picture or table claimed: a `text:p` in the `Caption` style, the caption's hyperlink annotation applied to every run that carries no link of its own, which is the link docling's Markdown wraps the whole caption in; an empty one is no paragraph, as it is no line in Markdown |
@@ -280,7 +280,7 @@ not repeated.
 | CheckboxItem | a `w:sdt` with `w14:checkbox` and `w14:checked` holding the glyph, then the text; the reader detects the control and strips the glyph |
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
 | Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
-| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; an SVG picture is a PNG drawn from it at twice 96 dpi for its size on the page, as the blip every reader draws, with the SVG attached through Word's `asvg:svgBlip` extension, which Word 2016 and later draw instead, and the reader, which cannot measure an SVG, reads the PNG; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
+| Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; an SVG picture is a PNG drawn from it at twice 96 dpi for its size on the page, as the blip every reader draws, with the SVG attached through Word's `asvg:svgBlip` extension, which Word 2016 and later draw instead, and the reader, which cannot measure an SVG, reads the PNG; a node without bytes gets the gray PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
 | ScriptText, table footnotes, Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
 | Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading. Every heading also carries a bookmark named with the Pandoc identifier of its text, numbered `-1`, `-2` on a repeat as Pandoc does, so a link to a heading's generated identifier resolves |
@@ -302,7 +302,7 @@ template.
 
 A spreadsheet holds cells, so this target writes the tabular nodes and reports
 every other one as dropped. One `table:table` per node, named for the caption
-where there is one and `Sheet<n>` where there is not, with the name sanitised:
+where there is one and `Sheet<n>` where there is not, with the name sanitized:
 ODF forbids `[ ] * ? : / \` in a sheet name and requires it to be unique in the
 document, so a forbidden character becomes a space and a collision takes a
 numeric suffix.
@@ -339,7 +339,7 @@ characters where ODF allows 127, and Excel refuses a workbook with no sheet at
 all, so a document with no table gets one empty sheet rather than none.
 
 And the sheet name survives here. `backend/xlsx.rs` wraps each sheet in a
-`Group` labelled `sheet` and named for it, so a caption written as a sheet name
+`Group` labeled `sheet` and named for it, so a caption written as a sheet name
 comes back as that group's name — where the ODS reader does not read the name
 at all. The writer reads it back off the group when one is there, which is what
 makes a second trip land where the first did: without it the returned tables
@@ -365,7 +365,7 @@ document has one, and a document that is a deck has one per slide.
 | Paragraph, InlineGroup, ScriptText, ListText, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
 | ListItem | `text:list`, which `add_odf_list` reads back; the stock marker style means an ordered list returns unordered |
 | Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it and a table's footnotes in one after it |
-| Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the grey PNG |
+| Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the gray PNG |
 | PageBreak | the slide boundary, and no element of its own |
 | Group, Located, Prov, Commented, Track, DoclangOnly | transparent, resolved before the split so a wrapper cannot become a slide boundary |
 
@@ -420,13 +420,13 @@ table; every `Picture` and `Table` comes back with `caption: None` and a
 sets a table caption anywhere in the tree.
 
 The XLSX reader gives each sheet a `PageInfo`, wraps the sheet in a `Group`
-labelled `sheet`, wraps each table in a `Prov`, and trails a `PageBreak` after
+labeled `sheet`, wraps each table in a `Prov`, and trails a `PageBreak` after
 every sheet but the first. This writer reproduces none of that structure — it
 writes sheets — so a workbook read back carries it and a workbook written from
 that reads back the same way, which is what the fixed point asks. The sheet
 name is the one piece of it the writer does read, off the group.
 
-The two spreadsheet readers do not detect regions alike. The four corpus
+The two spreadsheet readers do not detect regions alike. The corpus
 documents ODS parts into the wrong number of tables all pass as XLSX, so the
 named diffs below are ODS's rather than the family's.
 
@@ -460,7 +460,7 @@ runs and are lost by the DocLang reader, so they hold through an
 office round trip and not through a DocLang one.
 
 The ODF reader resolves a link's character style like any span's, so the
-stock `Internet link` style carries colour and no underline; an underline
+stock `Internet link` style carries color and no underline; an underline
 there would read back as an underlined run. Inline code is a monospace
 span that the reader has no field for, so it returns as plain text.
 
@@ -471,7 +471,7 @@ level's prefix and suffix. The writer collapses runs of spaces in headings
 and list items before writing, so a doubled space in the source does not
 survive the first trip and the second trip equals it. Where a
 run without a marker sits in such a text, the second trip merges it into
-its neighbour and the space count around it changes; the corpus test
+its neighbor and the space count around it changes; the corpus test
 compares with whitespace made uniform for that reason and no other.
 
 A page break is an empty paragraph, which the ODF reader drops and the
@@ -581,7 +581,7 @@ be represented; exit 2 when the command line is wrong. Warnings go to
 stderr as one line per distinct warning with a count, under a first line
 that says how many nodes and whether they were or would be dropped, so a
 document with forty placeholder pictures says so once. `--color
-auto|always|never` with `NO_COLOR` honoured, nothing on stdout but the path
+auto|always|never` with `NO_COLOR` honored, nothing on stdout but the path
 written. The contract is the fleet's and `--help` states it.
 
 ## 9. Non-goals
@@ -594,8 +594,9 @@ Duckling's.
 ## 10. Duckling integration
 
 Duckling depends on `waddle-core` at a version whose `docling-core`
-unifies with its own `docling`'s. Its output picker offers ODT and DOCX,
-with ODS and XLSX when a batch is tables. The queue accepts DocLang and
+unifies with its own `docling`'s. Its output picker offers ODT and DOCX
+for any queue, ODS for a queue that is all XLSX, XLSX for one that is all
+ODS, and ODP for one that is all PPTX. The queue accepts DocLang and
 JSON through docling.rs, so input is unchanged. Pictures invert: the bytes
 go into the package rather than beside the file, and Duckling's own asset
 pairing is not involved because the `DoclingDocument` it holds already

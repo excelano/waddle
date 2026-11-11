@@ -16,12 +16,12 @@ description: >-
 # waddle — a DoclingDocument to an office package
 
 `waddle` takes what docling.rs produced and writes an office package from it. docling.rs
-reads Word, PowerPoint, Excel, PDF, HTML and some forty other formats into a
+reads Word, PowerPoint, Excel, PDF, HTML and many other formats into a
 `DoclingDocument` and writes Markdown, JSON, DocLang and LaTeX from it, but no office
 format; waddle is the other direction. Every node the model holds goes into the construct
 the target has for it, and what the target cannot hold is said on stderr.
 
-The authoritative sources for waddle's behaviour are the binary itself (`waddle --help`)
+The authoritative sources for waddle's behavior are the binary itself (`waddle --help`)
 and the [README](https://github.com/excelano/waddle/blob/main/README.md); if anything here
 conflicts with them, they win. If a flag described here is missing from `waddle --help`,
 the installed copy predates it: upgrade with `sudo apt install --only-upgrade waddle`
@@ -30,7 +30,7 @@ from the README.
 
 ## Where waddle sits
 
-Three tools share the DocLang model. [Duckling](https://github.com/excelano/duckling)
+waddle shares the DocLang model with its siblings. [Duckling](https://github.com/excelano/duckling)
 converts documents with docling.rs on the desktop and writes DocLang, JSON, Markdown and
 LaTeX. [Segler](https://github.com/excelano/segler) reviews and corrects DocLang. waddle
 writes the office document. Convert, correct, publish. Reading an office file is never
@@ -53,7 +53,7 @@ if `report.odt` exists the result is `report (1).odt`, and stdout says so.
 
 Exit `0` is success, and a run that dropped or degraded nodes is a success: the warnings
 are on stderr, grouped by kind with a count, and the package is complete. `1` is bad input,
-a file that cannot be read or is none of the three formats, or, under `--strict`, a document
+a file that cannot be read or is not DocLang, a DocLang archive or docling JSON, or, under `--strict`, a document
 that cannot be carried whole. `2` is a bad command line, including `-` without `-o`.
 
 ## Pictures
@@ -62,7 +62,7 @@ docling's DocLang and JSON readers hand back every picture without its bytes; wa
 them itself. A `data:` URI in the document decodes in place, an `assets/` path is read
 beside a bare `.dclg` or out of a `.dclx`, and a path that leaves the input's own
 directory is refused. So keep a `.dclg` next to its `assets/` folder, as Duckling writes
-them. A picture that cannot be found is written as a small grey placeholder and reported as
+them. A picture that cannot be found is written as a small gray placeholder and reported as
 `picture: written as a placeholder`; that line with a count is how a document with forty
 missing images reads.
 
@@ -73,11 +73,11 @@ reads back into the document it came from as far as that reader allows. Where th
 the reader has no room, waddle says so:
 
 - `furniture: dropped, on the furniture layer` (also `notes`, `invisible`): page headers
-  and footers, navigation chrome, reviewer comments and hidden sheets have no place in the
-  first release.
+  and footers, navigation chrome, reviewer comments and hidden sheets have no construct in
+  any target.
 - `picture: written as a placeholder`: no bytes were found for it.
 - `comment_section: dropped, not supported by this target`, `page_furniture: …`: reviewer
-  comments and page furniture, later.
+  comments and page furniture.
 
 A checkbox is a real content control in DOCX and a `☐`/`☑` prefix in ODT. Code is a
 monospace block in both. Captions go before their table or picture. Numbered lists start

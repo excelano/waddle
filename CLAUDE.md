@@ -35,7 +35,7 @@ dropped. `node::kind` is the model for the rest. The library depends on `docling
 alone and not on `docling`, which is the binary's for reading input; a change that adds a C
 dependency, or a crate that fails on `wasm32-unknown-unknown`, to `waddle-core` is David's
 decision (`~/notes/pure_rust_preference.md`). **The writer emits what the reader
-recognises** — read the docling.rs reader for that format and emit the construct it keys
+recognizes** — read the docling.rs reader for that format and emit the construct it keys
 on, the style ids, the outline levels, the numbering formats. The test is the round trip,
 Markdown equality the floor and DocLang equality the target, and where the reader does not
 look (§6) the diff is listed by name in the test rather than tolerated in general. **Level

@@ -14,11 +14,11 @@ waddle --install-skill | --uninstall-skill
 | Flag | Effect |
 |---|---|
 | `<INPUT>` | a `.dclg`, `.dclx` or docling JSON file; `-` reads standard input |
-| `--to <FORMAT>` | `odt` or `docx`, required |
+| `--to <FORMAT>` | `odt`, `docx`, `ods`, `odp` or `xlsx`, required |
 | `-o, --output <PATH>` | a file to write, or an existing directory to write into; the default is beside the input with the target's extension; required with `-` |
 | `--dry-run` | print `would write PATH` and the warnings; write nothing |
 | `--strict` | refuse to write, exit 1, if any node would be dropped or degraded |
-| `--color auto\|always\|never` | colour on stderr; `auto` needs a terminal and no `NO_COLOR`; `always` overrides `NO_COLOR` |
+| `--color auto\|always\|never` | color on stderr; `auto` needs a terminal and no `NO_COLOR`; `always` overrides `NO_COLOR` |
 | `--install-skill`, `--uninstall-skill` | write or remove this skill under `~/.claude/skills/waddle/` |
 | `-h`, `-V` | help, version |
 
@@ -63,14 +63,14 @@ path outside the input's directory.
 ## Exit codes
 
 `0` success, including a dry run and a run with warnings. `1` bad input: unreadable,
-unrecognised, unreadable by docling, unwritable destination, or `--strict` refused.
+unrecognized, unreadable by docling, unwritable destination, or `--strict` refused.
 `2` bad command line: unknown flag, missing `--to`, `-` without `-o`.
 
 ## What each target keeps
 
-Both: title and headings (docling's level 1 is the document title, level N is the target's
-heading N-1, which is the convention both docling readers use), paragraphs with bold,
-italic, underline, strikethrough, sub and superscript, inline code and links, nested
+ODT and DOCX: title and headings (docling's level 1 is the document title, level N is the
+target's heading N-1, which is the convention both docling readers use), paragraphs with
+bold, italic, underline, strikethrough, sub and superscript, inline code and links, nested
 numbered and bulleted lists with their start numbers, tables with column and row spans and
 a header band, pictures with their bytes or a placeholder, captions before their object,
 code blocks, checkboxes, page breaks, key-value regions as two-column tables, charts as
@@ -82,14 +82,25 @@ DOCX only: a checkbox is a `w14:checkbox` content control; a blank paragraph is 
 one; a link inside a table cell is preceded by an empty underlined run, which is what
 keeps docling's DOCX reader from flattening the cell and losing the link.
 
-Neither target carries, in this release: page headers and footers, reviewer comments,
-anything on the furniture, notes or invisible layers, or formulas as equations (the LaTeX
-source is written as code).
+Neither ODT nor DOCX carries page headers and footers, reviewer comments, anything on the
+furniture, notes or invisible layers, or formulas as equations (the LaTeX source is
+written as code).
+
+ODS and XLSX: one sheet per table, chart with data, or key-value region, named for its
+caption where there is one; every other node is dropped and reported, since a spreadsheet
+has no cell for a heading, a paragraph or a picture. Spans are not written, and table
+footnotes are not either. XLSX caps a sheet name at 31 characters, and a document with no
+table gets one empty sheet, because Excel refuses a workbook with none.
+
+ODP: a level 1 heading starts a slide and becomes its title, a page break starts a slide
+with no title, and a document with neither is one slide. Deeper headings, text, lists,
+tables and pictures go on the slide in order; an ordered list comes back unordered, and a
+block nested in a table cell is written as its text.
 
 ## The library
 
 ```rust
-let out = waddle_core::odt::write(&doc)?;   // or waddle_core::docx::write
+let out = waddle_core::odt::write(&doc)?;   // or docx, ods, odp, xlsx
 std::fs::write("report.odt", &out.bytes)?;
 for warning in &out.warnings { eprintln!("{warning}"); }
 ```

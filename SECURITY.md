@@ -2,13 +2,13 @@
 
 ## Reporting a vulnerability
 
-Please report suspected vulnerabilities privately through GitHub Security Advisories at https://github.com/excelano/waddle/security/advisories/new. If you would rather not use GitHub, email david.anderson@excelano.com instead. I aim to respond within seven days.
+Please report suspected vulnerabilities privately, using the **Report a vulnerability** button on the Security tab of this repository. If that button is not there, or you would rather not go through GitHub, email david.anderson@excelano.com instead. I aim to respond within seven days.
 
 Please do not open public issues for security problems.
 
 ## Supported versions
 
-The latest release receives security fixes. Older versions are not supported.
+The latest release receives security fixes. Older versions are not supported. A fix ships in a new release; update the way you installed.
 
 ## What waddle can access
 
@@ -19,6 +19,8 @@ The `waddle-core` library reads and writes nothing; it takes a document in memor
 ## What waddle stores
 
 waddle stores nothing beyond the output you ask for. There is no config directory, no history file, no cache, no telemetry, no analytics, and no remote logging. It reads a document, writes a package, and exits.
+
+The one exception is the Claude Code skill: `waddle --install-skill` writes it to `~/.claude/skills/waddle/`, and `waddle --uninstall-skill` removes that directory. Neither runs unless you ask for it.
 
 ## Verifying releases
 

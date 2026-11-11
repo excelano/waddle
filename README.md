@@ -22,7 +22,7 @@ The route from a DoclingDocument back to Word today is Markdown and then Pandoc,
 
 That plainness is the design. The model carries no styles, page geometry, fonts or themes, so waddle does not try to reproduce how the source document looked; there is nothing to reproduce it from. What it does is put every node the model holds into the construct the format has for it, and say on stderr what it could not carry. `--strict` turns that into a refusal.
 
-The construct chosen for each node is the one docling.rs's own reader for that format recognises, so a package waddle writes reads back into the document it was written from, as far as the reader allows; the design document in the repository lists where it does not.
+The construct chosen for each node is the one docling.rs's own reader for that format recognizes, so a package waddle writes reads back into the document it was written from, as far as the reader allows; the design document in the repository lists where it does not.
 
 ## Install
 
@@ -41,7 +41,7 @@ with the rest of your system:
 
 ## Use it from Rust
 
-The library is `waddle-core`, and it depends on `docling-core` alone: no readers, no ML, no C. Give it a `DoclingDocument` and it returns the package bytes and the warnings it raised. [Duckling](https://github.com/excelano/duckling), the desktop converter over docling.rs, is the first caller.
+The library is `waddle-core`, and it depends on `docling-core` alone: no readers, no ML, no C. Give it a `DoclingDocument` and it returns the package bytes and the warnings it raised. [Duckling](https://github.com/excelano/duckling), the desktop converter over docling.rs, calls it.
 
 ## Use it from Claude Code
 
@@ -53,8 +53,8 @@ That writes `~/.claude/skills/waddle/` and stamps in the skill's revision, which
 
 ## The family
 
-waddle is one of three tools around DocLang and docling.rs. Duckling converts documents with docling.rs and shows the result. [Segler](https://github.com/excelano/segler) reviews and corrects DocLang. waddle writes the office document. Convert, correct, publish.
+waddle is one of the tools around DocLang and docling.rs. Duckling converts documents with docling.rs and shows the result. [Segler](https://github.com/excelano/segler) reviews and corrects DocLang. waddle writes the office document. Convert, correct, publish.
 
-## Licence
+## License
 
-MIT, matching docling.rs.
+MIT. See [LICENSE](LICENSE).
