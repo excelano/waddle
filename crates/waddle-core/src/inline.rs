@@ -17,7 +17,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{InlineRun, Script};
+use docling_core::{InlineRun, Script, ScriptRun};
 
 /// One run of text with one formatting.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -155,15 +155,32 @@ pub fn from_inline_runs(runs: &[InlineRun]) -> Vec<Run> {
             italic: r.italic,
             underline: r.underline,
             strike: r.strike,
-            script: match r.script {
-                Script::Baseline => Position::Baseline,
-                Script::Sub => Position::Sub,
-                Script::Super => Position::Super,
-            },
+            script: position(r.script),
             code: r.code,
             href: None,
         })
         .collect()
+}
+
+/// The runs of a PDF item the script-position stage marked. Each run's
+/// text is raw, spaces included, and its link covers that run alone.
+pub fn from_script_runs(runs: &[ScriptRun]) -> Vec<Run> {
+    runs.iter()
+        .map(|r| Run {
+            text: r.text.clone(),
+            script: position(r.script),
+            href: r.hyperlink.clone(),
+            ..Run::default()
+        })
+        .collect()
+}
+
+fn position(script: Script) -> Position {
+    match script {
+        Script::Baseline => Position::Baseline,
+        Script::Sub => Position::Sub,
+        Script::Super => Position::Super,
+    }
 }
 
 /// A standalone caption's runs: its own inline markup, under the caption's

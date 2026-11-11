@@ -184,6 +184,7 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>, anchors: &mut HashSet<String>
                 if let Some(caption) = &table.caption {
                     out.push(caption.clone().into());
                 }
+                out.extend(table.footnotes.iter().cloned().map(Piece::from));
             }
             Node::Picture { caption, .. } => out.extend(caption.clone().map(Piece::from)),
             // A standalone caption is a paragraph of its own, so its text
@@ -200,6 +201,7 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>, anchors: &mut HashSet<String>
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::Track { inner, .. }
+            | Node::ScriptText { inner, .. }
             | Node::DoclangOnly(inner) => body_text(std::slice::from_ref(inner), out, anchors),
             // Written, but not as text this comparison can follow: a
             // formula becomes its source in a code paragraph, a field
@@ -429,8 +431,18 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::Track { inner, .. }
+            | Node::ScriptText { inner, .. }
             | Node::DoclangOnly(inner) => count(std::slice::from_ref(inner), want, target),
-            Node::Table(table) => usize::from(want == Want::Tables && !one_cell(target, table)),
+            // A one-cell table the DOCX reader unwraps returns as its
+            // cell's content, so that content counts in its place.
+            Node::Table(table) if one_cell(target, table) => table
+                .cell_blocks
+                .iter()
+                .flatten()
+                .flatten()
+                .map(|blocks| count(blocks, want, target))
+                .sum(),
+            Node::Table(_) => usize::from(want == Want::Tables),
             // A field region is written as a table of its keys and values.
             Node::FieldRegion { .. } => usize::from(want == Want::Tables),
             // A chart with data is written as a table, one without as a

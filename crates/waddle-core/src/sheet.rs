@@ -134,6 +134,7 @@ impl Walk {
             | Node::LabeledText { .. }
             | Node::Chart { .. }
             | Node::InlineGroup { .. }
+            | Node::ScriptText { .. }
             | Node::CommentSection { .. }
             | Node::PageFurniture { .. }
             | Node::KeyValueGraph { .. }

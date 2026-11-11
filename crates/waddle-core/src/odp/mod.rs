@@ -18,7 +18,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, ContentLayer, DoclingDocument, Node, PictureImage, Table};
+use docling_core::{ContentLayer, DoclingDocument, Node, PictureImage, Table};
 
 use crate::Error;
 use crate::inline::{self, Run};
@@ -141,6 +141,7 @@ impl Writer {
                 | Node::LabeledText { .. }
                 | Node::FieldRegion { .. }
                 | Node::InlineGroup { .. }
+                | Node::ScriptText { .. }
                 | Node::TextDump(_)
                 | Node::PageBreak
                 | Node::Table(_)
@@ -215,6 +216,9 @@ impl Writer {
                     let line = row.join(" ");
                     self.paragraph(&inline::from_markdown(&line));
                 }
+                for note in &table.footnotes {
+                    self.paragraph(&inline::from_markdown(note));
+                }
             }
             Node::Picture { caption, .. } => {
                 self.caption_frame_text(caption.as_deref());
@@ -239,6 +243,7 @@ impl Writer {
             | Node::Caption { .. }
             | Node::LabeledText { .. }
             | Node::InlineGroup { .. }
+            | Node::ScriptText { .. }
             | Node::TextDump(_)
             | Node::PageBreak
             | Node::Group { .. }
@@ -281,6 +286,20 @@ impl Writer {
         self.body.push_str("</draw:text-box></draw:frame>\n");
     }
 
+    /// A table's footnotes in a text box of their own, after its frame,
+    /// which is where docling's Markdown puts them.
+    fn footnote_frame(&mut self, footnotes: &[String]) {
+        let runs: Vec<Vec<Run>> = footnotes.iter().map(|n| inline::from_markdown(n)).collect();
+        if runs.iter().all(|r| inline::is_blank(r)) {
+            return;
+        }
+        self.body.push_str("<draw:frame><draw:text-box>\n");
+        for note in &runs {
+            self.paragraph(note);
+        }
+        self.body.push_str("</draw:text-box></draw:frame>\n");
+    }
+
     /// A table, a chart or a picture in its own frame. Exhaustive; the text
     /// nodes never reach here, because `takes_own_frame` sent them elsewhere.
     fn block_frame(&mut self, node: &Node) {
@@ -288,6 +307,7 @@ impl Writer {
             Node::Table(table) => {
                 self.caption_frame(table.caption.as_deref(), None);
                 self.table_frame(table);
+                self.footnote_frame(&table.footnotes);
             }
             Node::Chart { table, caption, .. } if !table.rows.is_empty() => {
                 self.caption_frame(caption.as_deref(), None);
@@ -320,13 +340,7 @@ impl Writer {
                     .collect();
                 self.table_frame(&Table {
                     rows,
-                    location: None,
-                    structure: None,
-                    cell_blocks: None,
-                    caption: None,
-                    caption_parent: CaptionParent::Body,
-                    caption_location: None,
-                    cells: None,
+                    ..Table::default()
                 });
             }
             Node::Heading { .. }
@@ -339,6 +353,7 @@ impl Writer {
             | Node::Caption { .. }
             | Node::LabeledText { .. }
             | Node::InlineGroup { .. }
+            | Node::ScriptText { .. }
             | Node::TextDump(_)
             | Node::PageBreak
             | Node::Group { .. }
@@ -378,6 +393,7 @@ impl Writer {
             Node::InlineGroup { runs, md_text, .. } => {
                 self.paragraph(&inline::from_group(md_text, runs))
             }
+            Node::ScriptText { runs, .. } => self.paragraph(&inline::from_script_runs(runs)),
             Node::CheckboxItem { checked, text } => {
                 let mark = if *checked { "[x] " } else { "[ ] " };
                 let mut runs = vec![inline::plain(mark)];
@@ -590,6 +606,7 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::LabeledText { .. }
             | Node::FieldRegion { .. }
             | Node::InlineGroup { .. }
+            | Node::ScriptText { .. }
             | Node::TextDump(_)
             | Node::Table(_)
             | Node::Picture { .. }
@@ -636,6 +653,7 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::Caption { .. }
         | Node::LabeledText { .. }
         | Node::InlineGroup { .. }
+        | Node::ScriptText { .. }
         | Node::TextDump(_)
         | Node::PageBreak
         | Node::Group { .. }
@@ -658,6 +676,7 @@ fn takes_own_frame(node: &Node) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use docling_core::CaptionParent;
 
     fn content_of(doc: &DoclingDocument) -> String {
         let mut writer = Writer::default();
@@ -719,6 +738,8 @@ mod tests {
             caption_parent: CaptionParent::Body,
             caption_location: None,
             cells: None,
+            footnotes: Vec::new(),
+            document_index: false,
         }));
         let xml = content_of(&doc);
         // The text box closes before the table's frame opens: a frame reads
