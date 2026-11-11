@@ -25,6 +25,3 @@ resvg = { workspace = true, optional = true }
 [dev-dependencies]
 # The round trip: write a package, read it back with docling.rs's own reader.
 docling.workspace = true
-
-[package.metadata.dist]
-dist = false
