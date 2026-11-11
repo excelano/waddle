@@ -34,6 +34,7 @@ pub fn kind(node: &Node) -> &'static str {
         Node::Track { .. } => "track",
         Node::Located { .. } => "located",
         Node::Prov { .. } => "prov",
+        Node::ScriptText { .. } => "script_text",
         Node::PageFurniture { .. } => "page_furniture",
         Node::FurnitureText { .. } => "furniture_text",
         Node::PictureChildren(_) => "picture_children",

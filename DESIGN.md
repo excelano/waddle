@@ -245,10 +245,12 @@ level 1 would read back one level deeper than it went in.
 | Heading level 1 | `text:p` with the `Title` paragraph style |
 | Heading level N > 1 | `text:h text:outline-level="N-1"` with `Heading_20_N-1` |
 | Paragraph, InlineGroup, ListText | `text:p`; runs as `text:span` on automatic text styles; `text:a xlink:href` for links; `text:line-break`, `text:tab`, `text:s` for whitespace |
+| ScriptText | a `text:p` of its runs, a superscript or subscript run as a `text:span` with `style:text-position`, a run's link as `text:a`; a footnote marked this way is a paragraph, as LabeledText is |
 | ListItem | nested `text:list` / `text:list-item`, rebuilt from the flat level sequence, every element naming a generated `text:list-style` whose levels say numbered or bullet and where numbering starts, since the reader reads the kind from the element's own style and the start from the level; a new element opens where the model says a list begins or the kind changes; a level deeper than one below its parent nests one deeper, which is where the reader would put it; numbered levels show the enclosing numbers (`1.1.`) in Writer through `text:display-levels`, which the reader does not read |
 | CheckboxItem | `text:p` prefixed `☐ ` or `☑ `; ODF text has no checkbox and the reader detects none |
 | Code | one `text:p` in the `Preformatted_20_Text` style, lines as `text:line-break`, so the block returns as one paragraph with its newlines rather than one paragraph per line; the `pretty` form when the pipeline made one; the reader has no code detection, see §6 |
 | Table | `table:table` with `table:table-column` per column, `table:table-header-rows` around the leading rows the structure marks as header, spans from `derive_cells()` as `table:number-columns-spanned` / `-rows-spanned` with `table:covered-table-cell` under them; a cell with rich blocks holds them as body nodes; a plain cell is `office:value-type="string"`, which the reader reads flat, and a cell with any span or link is left untyped, which the reader reads as rich and so keeps its runs and links; header cells in the `Table_20_Heading` paragraph style, bold on the style rather than a span so it does not return as `**bold**` |
+| Table footnotes | one `text:p` each after the table, which is where docling's Markdown prints them; they return as paragraphs, not as the table's |
 | Picture | the caption first, under the caption's hyperlink annotation where it has one, then `draw:frame` anchored as character in its own `text:p` with `draw:image xlink:href="Pictures/…"` and the bytes in the package, sized at the display size the source recorded where the reader kept one, else from the pixels at 96 dpi, and capped at the text width; a node without bytes gets a small grey PNG, because a frame with no image part reads back as nothing and a real part returns a picture node, and is reported as a placeholder |
 | Chart | with data, its caption then its table; without, a placeholder picture |
 | Formula | the LaTeX source as a `text:p` in the code style; no MathML |
@@ -279,7 +281,7 @@ not repeated.
 | Code | one `w:p` per line in the `SourceCode` style on Consolas, blank lines as empty paragraphs; the reader keys on that style id and on the font, joins consecutive code paragraphs into one block, and skips a blank line, so blank lines inside a block do not return |
 | Table | `w:tbl` in the `TableGrid` style with a `w:tblGrid`; from `derive_cells()`, `w:gridSpan` on an anchor with no cell for the positions it covers, and `w:vMerge w:val="restart"` on an anchor with a `w:vMerge` cell under it for every row it covers; `w:tblHeader` on the leading header rows for Word's sake, though the reader ignores it; header cells in the `TableHead` paragraph style, bold on the style rather than a run; a cell with rich blocks holds them, with a paragraph after a nested table because Word requires one; a cell whose text has a link gets an empty underlined run before the link, because the reader keeps a cell's links only when it finds run formatting and looks only at the paragraph's direct runs, never inside a hyperlink; two tables back to back get an empty paragraph between them, judged on what was written, and the body ends in one, because Word joins adjacent tables and wants a paragraph last |
 | Picture | the caption first, under the caption's hyperlink annotation as in ODT, then `w:drawing` with an inline `a:blip r:embed` and the bytes under `word/media/` with the extension the media type names, since the reader names the type from the extension; an SVG picture is a PNG drawn from it at twice 96 dpi for its size on the page, as the blip every reader draws, with the SVG attached through Word's `asvg:svgBlip` extension, which Word 2016 and later draw instead, and the reader, which cannot measure an SVG, reads the PNG; a node without bytes gets the grey PNG; a description whose provenance is `alt_text` is the `descr` of `wp:docPr`, where the reader reads an author's alt text, and a description of any other provenance is not written, because it would return claiming to be one |
-| Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
+| ScriptText, table footnotes, Chart, Formula, Caption, LabeledText, FieldRegion, TextDump, Group and the wrappers | as for ODT, except that an empty DocLang-only paragraph is not written: it is the text the reader leaves after a table for each multi-run paragraph in its cells, and written as a blank `w:p` it would return as a visible one |
 | PageBreak | `w:br w:type="page"` in its own paragraph; the reader returns it as an empty text node |
 | Anchor | `w:bookmarkStart w:name` and `w:bookmarkEnd` at the start of the next paragraph with text, as for ODT; the reader names the destination after the bookmark, or after the heading's text when the paragraph is a heading. Every heading also carries a bookmark named with the Pandoc identifier of its text, numbered `-1`, `-2` on a repeat as Pandoc does, so a link to a heading's generated identifier resolves |
 
@@ -307,7 +309,7 @@ numeric suffix.
 
 | Node | ODS |
 |---|---|
-| Table | one sheet, a plain rectangular grid of `table:table-cell` in `office:value-type="string"`; short rows padded to the widest, because a ragged row leaves a hole the reader parts on; the leading header rows in a bold cell style, for the reader's sake rather than the round trip's |
+| Table | one sheet, a plain rectangular grid of `table:table-cell` in `office:value-type="string"`; short rows padded to the widest, because a ragged row leaves a hole the reader parts on; the leading header rows in a bold cell style, for the reader's sake rather than the round trip's; the footnotes are not written, since a row under the grid would read back as data |
 | Chart | with data, its table as a sheet; without, dropped and reported |
 | FieldRegion | a sheet of its keys and values, as it is a table in every other target |
 | Group, Located, Prov, Commented, Track, DoclangOnly | transparent, as elsewhere |
@@ -360,9 +362,9 @@ document has one, and a document that is a deck has one per slide.
 |---|---|
 | Heading, level 1 | the slide, and a `draw:frame` with `presentation:class="title"` holding its text |
 | Heading, level 2 and deeper | `text:h` in the slide's text box at one outline level shallower, the inverse of the reader |
-| Paragraph, InlineGroup, ListText, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
+| Paragraph, InlineGroup, ScriptText, ListText, CheckboxItem, Code, Formula, Caption, LabeledText, TextDump | `text:p` in the slide's text box; a checkbox keeps its `[x]` marker as text, and code one paragraph per line |
 | ListItem | `text:list`, which `add_odf_list` reads back; the stock marker style means an ordered list returns unordered |
-| Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it |
+| Table, Chart with data, FieldRegion | `table:table` in a `draw:frame` of its own, the caption in a text box before it and a table's footnotes in one after it |
 | Picture, Chart without data | `draw:image` in a frame of its own, sized as in ODT, the caption before it; a node without bytes gets the grey PNG |
 | PageBreak | the slide boundary, and no element of its own |
 | Group, Located, Prov, Commented, Track, DoclangOnly | transparent, resolved before the split so a wrapper cannot become a slide boundary |
@@ -465,10 +467,9 @@ span that the reader has no field for, so it returns as plain text.
 Headings and list items return as flat Markdown with no runs, so underline,
 sub and superscript in them are lost, and a multilevel marker such as
 `1.1.` returns as `1.` because the reader composes the marker from the
-level's prefix and suffix. The reader also joins a flat text's runs with a
-space beside any that is there, so `three **bold**` returns as
-`three  **bold**`; the writer collapses runs of spaces in headings and list
-items before writing, which makes the second trip equal the first. Where a
+level's prefix and suffix. The writer collapses runs of spaces in headings
+and list items before writing, so a doubled space in the source does not
+survive the first trip and the second trip equals it. Where a
 run without a marker sits in such a text, the second trip merges it into
 its neighbour and the space count around it changes; the corpus test
 compares with whitespace made uniform for that reason and no other.

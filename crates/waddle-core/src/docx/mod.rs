@@ -10,9 +10,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{
-    CaptionParent, ContentLayer, DoclingDocument, Node, PictureDescription, PictureImage, Table,
-};
+use docling_core::{ContentLayer, DoclingDocument, Node, PictureDescription, PictureImage, Table};
 
 use crate::Error;
 use crate::inline::{
@@ -248,6 +246,9 @@ impl Writer {
             Node::InlineGroup { runs, md_text, .. } => {
                 self.paragraph(None, &inline::from_group(md_text, runs), true)
             }
+            Node::ScriptText { runs, .. } => {
+                self.paragraph(None, &inline::from_script_runs(runs), true)
+            }
             Node::CheckboxItem { checked, text } => self.checkbox(*checked, text),
             Node::ListItem { .. } => self.list(std::slice::from_ref(node)),
             Node::Code { text, pretty, .. } => {
@@ -309,15 +310,7 @@ impl Writer {
                 self.table(
                     &Table {
                         rows,
-                        location: None,
-                        structure: None,
-                        cell_blocks: None,
-                        caption: None,
-                        // No caption to hang, so the field is the default
-                        // every declarative backend leaves alone.
-                        caption_parent: CaptionParent::Body,
-                        caption_location: None,
-                        cells: None,
+                        ..Table::default()
                     },
                     None,
                 );
@@ -418,8 +411,8 @@ impl Writer {
         self.body.push_str("</w:p>\n");
     }
 
-    /// The caption, then the table, which is the order docling's Markdown
-    /// renders them in.
+    /// The caption, the table, then its footnotes, which is the order
+    /// docling's Markdown renders them in.
     fn table(&mut self, table: &Table, caption: Option<&str>) {
         if let Some(caption) = caption {
             self.paragraph(Some("Caption"), &inline::from_markdown(caption), false);
@@ -535,6 +528,9 @@ impl Writer {
             self.body.push_str("</w:tr>\n");
         }
         self.body.push_str("</w:tbl>\n");
+        for note in &table.footnotes {
+            self.paragraph(None, &inline::from_markdown(note), false);
+        }
     }
 
     /// The caption, then the picture in its own paragraph. A picture without
@@ -741,6 +737,7 @@ fn rel_id(index: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use docling_core::CaptionParent;
 
     fn body_of(doc: &DoclingDocument) -> String {
         let mut writer = Writer::default();
@@ -902,6 +899,8 @@ mod tests {
             caption_parent: CaptionParent::Body,
             caption_location: None,
             cells: None,
+            footnotes: Vec::new(),
+            document_index: false,
         }));
         let body = body_of(&doc);
         assert_eq!(body.matches("<w:tblHeader/>").count(), 1);
@@ -913,6 +912,45 @@ mod tests {
             8,
             "no cell for the spanned-over position"
         );
+    }
+
+    #[test]
+    fn a_marked_pdf_item_writes_its_runs_at_their_script_positions() {
+        use docling_core::{Script, ScriptRun};
+        let run = |text: &str, script| ScriptRun {
+            text: text.into(),
+            script,
+            prov: Vec::new(),
+            hyperlink: None,
+        };
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::ScriptText {
+            inner: Box::new(Node::Paragraph { text: "H2O".into() }),
+            runs: vec![
+                run("H", Script::Baseline),
+                run("2", Script::Sub),
+                run("O", Script::Baseline),
+            ],
+        });
+        let body = body_of(&doc);
+        assert!(body.contains(
+            "<w:r><w:rPr><w:vertAlign w:val=\"subscript\"/></w:rPr><w:t xml:space=\"preserve\">2</w:t></w:r>"
+        ));
+        assert_eq!(body.matches("<w:p>").count(), 1);
+    }
+
+    #[test]
+    fn a_tables_footnotes_follow_it() {
+        let mut doc = DoclingDocument::new("t");
+        doc.push(Node::Table(Table {
+            rows: vec![vec!["a".into(), "b".into()]],
+            footnotes: vec!["* estimated".into()],
+            ..Table::default()
+        }));
+        let body = body_of(&doc);
+        let table_end = body.find("</w:tbl>").expect("a table");
+        let note = body.find("estimated").expect("the footnote");
+        assert!(note > table_end);
     }
 
     #[test]

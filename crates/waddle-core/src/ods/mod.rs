@@ -125,6 +125,8 @@ mod tests {
             caption_parent: CaptionParent::Body,
             caption_location: None,
             cells: None,
+            footnotes: Vec::new(),
+            document_index: false,
         }
     }
 

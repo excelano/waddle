@@ -507,9 +507,7 @@ fn lists_come_back_nested_numbered_and_started() {
     assert_eq!(
         shape,
         vec![
-            // Two spaces: the reader joins a list item's runs with a space
-            // beside the one that is there (DESIGN.md §6).
-            (true, 3, true, 0, "three  **bold**", Some("3.")),
+            (true, 3, true, 0, "three **bold**", Some("3.")),
             (true, 4, false, 0, "four", Some("4.")),
             (false, 0, true, 1, "a bullet under four", None),
             (false, 0, false, 1, "another", None),
@@ -553,6 +551,8 @@ fn a_table_keeps_its_grid_spans_and_caption_text() {
         caption_parent: CaptionParent::Body,
         caption_location: None,
         cells: None,
+        footnotes: Vec::new(),
+        document_index: false,
     }));
     let (back, out) = odt_trip(&doc);
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
@@ -929,6 +929,8 @@ fn docx_tables_pictures_code_and_checkboxes() {
         caption_parent: CaptionParent::Body,
         caption_location: None,
         cells: None,
+        footnotes: Vec::new(),
+        document_index: false,
     }));
     doc.push(Node::Picture {
         caption: Some("Figure 1".into()),
@@ -1017,6 +1019,8 @@ fn ods_tables_come_back_as_tables_and_prose_is_reported() {
         caption_parent: CaptionParent::Body,
         caption_location: None,
         cells: None,
+        footnotes: Vec::new(),
+        document_index: false,
     }));
     let (back, out) = ods_trip(&doc);
 
@@ -1060,6 +1064,8 @@ fn ods_splits_a_table_on_a_blank_row() {
         caption_parent: CaptionParent::Body,
         caption_location: None,
         cells: None,
+        footnotes: Vec::new(),
+        document_index: false,
     }));
     let (back, _) = ods_trip(&doc);
     let tables = back

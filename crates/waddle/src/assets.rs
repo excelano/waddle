@@ -121,6 +121,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::Prov { inner, .. }
             | Node::Commented { inner, .. }
             | Node::Track { inner, .. }
+            | Node::ScriptText { inner, .. }
             | Node::DoclangOnly(inner) => collect(std::slice::from_mut(&mut **inner), out),
             Node::Table(table) => {
                 if let Some(blocks) = &mut table.cell_blocks {

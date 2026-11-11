@@ -9,7 +9,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{CaptionParent, ContentLayer, DoclingDocument, Node, PictureImage, Table};
+use docling_core::{ContentLayer, DoclingDocument, Node, PictureImage, Table};
 
 use crate::inline::{
     self, Position, Run, caption_runs, collapse_spaces, is_blank, merge_adjacent, outside_links,
@@ -247,6 +247,9 @@ impl Writer {
             Node::InlineGroup { runs, md_text, .. } => {
                 self.paragraph("Text_20_body", &inline::from_group(md_text, runs))
             }
+            Node::ScriptText { runs, .. } => {
+                self.paragraph("Text_20_body", &inline::from_script_runs(runs))
+            }
             Node::CheckboxItem { checked, text } => {
                 let mut runs = vec![Run {
                     text: if *checked { "☑ " } else { "☐ " }.to_string(),
@@ -301,15 +304,7 @@ impl Writer {
                 self.table(
                     &Table {
                         rows,
-                        location: None,
-                        structure: None,
-                        cell_blocks: None,
-                        caption: None,
-                        // No caption to hang, so the field is the default
-                        // every declarative backend leaves alone.
-                        caption_parent: CaptionParent::Body,
-                        caption_location: None,
-                        cells: None,
+                        ..Table::default()
                     },
                     None,
                 );
@@ -381,8 +376,8 @@ impl Writer {
         self.body.push_str("</text:p>\n");
     }
 
-    /// The caption, then the table, which is the order docling's Markdown
-    /// renders them in.
+    /// The caption, the table, then its footnotes, which is the order
+    /// docling's Markdown renders them in.
     fn table(&mut self, table: &Table, caption: Option<&str>) {
         if let Some(caption) = caption {
             self.paragraph("Caption", &inline::from_markdown(caption));
@@ -470,6 +465,9 @@ impl Writer {
             }
         }
         self.body.push_str("</table:table>\n");
+        for note in &table.footnotes {
+            self.paragraph("Text_20_body", &inline::from_markdown(note));
+        }
     }
 
     /// The caption, then the picture in its own paragraph. A picture without
@@ -616,6 +614,7 @@ impl Writer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use docling_core::CaptionParent;
 
     fn content_of(doc: &DoclingDocument) -> String {
         let mut writer = Writer::default();
@@ -771,6 +770,8 @@ mod tests {
             caption_parent: CaptionParent::Body,
             caption_location: None,
             cells: None,
+            footnotes: Vec::new(),
+            document_index: false,
         }));
         let xml = content_of(&doc);
         assert!(xml.contains(r#"<text:p text:style-name="Caption">Table 1: things</text:p>"#));

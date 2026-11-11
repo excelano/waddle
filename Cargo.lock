@@ -188,9 +188,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "calamine"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9ca341b94bc4b29e08970b1a03914fad2dfe177e2ecb67fcd6de9046004aafb"
+checksum = "f431b67cba6122a1f7d26b7adafc71bbdf07026095fe811f5efc025d8748e1d8"
 dependencies = [
  "atoi_simd",
  "byteorder",
@@ -585,9 +585,9 @@ dependencies = [
 
 [[package]]
 name = "docling"
-version = "2.65.1"
+version = "2.80.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08e9e40b738584d727ec1600b8fb43b58aea751cd95750679e4a7c2dc251cd42"
+checksum = "997f20f64c8cdd1c7d38bd369ee37edf754b9c87ff11d69b1b028a5d7d58ba3c"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -620,9 +620,9 @@ dependencies = [
 
 [[package]]
 name = "docling-core"
-version = "2.65.1"
+version = "2.80.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71a3c43802f66bfc2ccd4c051baa2cb975e5e103eea9756935ce64ca724ff998"
+checksum = "f44f823d84df03eac0e077a012458a7314701efb744f83d4a128080c5a2156c2"
 dependencies = [
  "libc",
  "png 0.18.1",

@@ -17,7 +17,7 @@
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
 
-use docling_core::{InlineRun, Script};
+use docling_core::{InlineRun, Script, ScriptRun};
 
 /// One run of text with one formatting.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -155,15 +155,32 @@ pub fn from_inline_runs(runs: &[InlineRun]) -> Vec<Run> {
             italic: r.italic,
             underline: r.underline,
             strike: r.strike,
-            script: match r.script {
-                Script::Baseline => Position::Baseline,
-                Script::Sub => Position::Sub,
-                Script::Super => Position::Super,
-            },
+            script: position(r.script),
             code: r.code,
             href: None,
         })
         .collect()
+}
+
+/// The runs of a PDF item the script-position stage marked. Each run's
+/// text is raw, spaces included, and its link covers that run alone.
+pub fn from_script_runs(runs: &[ScriptRun]) -> Vec<Run> {
+    runs.iter()
+        .map(|r| Run {
+            text: r.text.clone(),
+            script: position(r.script),
+            href: r.hyperlink.clone(),
+            ..Run::default()
+        })
+        .collect()
+}
+
+fn position(script: Script) -> Position {
+    match script {
+        Script::Baseline => Position::Baseline,
+        Script::Sub => Position::Sub,
+        Script::Super => Position::Super,
+    }
 }
 
 /// A standalone caption's runs: its own inline markup, under the caption's
@@ -639,26 +656,28 @@ mod tests {
 /// reader keeps `Some `, `italic`, ` bold`. The Markdown's own spacing is
 /// docling's, with a space at every run boundary, so it is consulted only
 /// for a paragraph whose runs carry no edge whitespace at all, and then only
-/// for whether there is a space between two runs, never how many. The two
-/// sides are aligned character by character with whitespace set aside; link
-/// targets are copied onto the runs, and a single space goes between two
-/// trimmed runs where the Markdown has one. A space between two links, or
+/// for whether there is whitespace between two runs and which character it
+/// starts with, never how much. The two sides are aligned character by
+/// character with whitespace set aside; link targets are copied onto the
+/// runs, and one whitespace character, the Markdown's first there, goes
+/// between two trimmed runs where the Markdown has any, so a line break
+/// between runs stays a line break. A space between two links, or
 /// between a link and plain text, is linked only when both sides are. If
 /// the two sides do not align, the runs are used as they are.
 pub fn from_group(md_text: &str, runs: &[InlineRun]) -> Vec<Run> {
     let structured = from_inline_runs(runs);
     let scanned = from_markdown(md_text);
-    // Each non-whitespace character of the Markdown: its link, and whether
-    // whitespace follows it.
-    let mut marks: Vec<(char, Option<&str>, bool)> = Vec::new();
+    // Each non-whitespace character of the Markdown: its link, and the
+    // whitespace character that follows it, if any.
+    let mut marks: Vec<(char, Option<&str>, Option<char>)> = Vec::new();
     for run in &scanned {
         for c in run.text.chars() {
             if c.is_whitespace() {
                 if let Some(last) = marks.last_mut() {
-                    last.2 = true;
+                    last.2.get_or_insert(c);
                 }
             } else {
-                marks.push((c, run.href.as_deref(), false));
+                marks.push((c, run.href.as_deref(), None));
             }
         }
     }
@@ -681,21 +700,21 @@ pub fn from_group(md_text: &str, runs: &[InlineRun]) -> Vec<Run> {
     // The link of the previous character, across run boundaries.
     let mut prev: Option<&str> = None;
     for run in structured {
-        let touches = trimmed
-            && at > 0
-            && marks[at - 1].2
-            && !run.text.starts_with(char::is_whitespace)
-            && out
-                .last()
-                .is_some_and(|last| !last.text.ends_with(char::is_whitespace));
-        if touches {
+        let gap = (trimmed && at > 0 && !run.text.starts_with(char::is_whitespace))
+            .then(|| marks[at - 1].2)
+            .flatten()
+            .filter(|_| {
+                out.last()
+                    .is_some_and(|last: &Run| !last.text.ends_with(char::is_whitespace))
+            });
+        if let Some(gap) = gap {
             let next = marks.get(at).and_then(|&(_, h, _)| h);
             let href = if prev == next { prev } else { None };
             out.push(Run {
                 href: href.map(str::to_string),
                 ..Run::default()
             });
-            out.last_mut().expect("just pushed").text.push(' ');
+            out.last_mut().expect("just pushed").text.push(gap);
         }
         let mut piece = String::new();
         let mut current: Option<Option<&str>> = None;
