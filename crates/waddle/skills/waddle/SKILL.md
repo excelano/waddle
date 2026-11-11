@@ -25,8 +25,7 @@ The authoritative sources for waddle's behavior are the binary itself (`waddle -
 and the [README](https://github.com/excelano/waddle/blob/main/README.md); if anything here
 conflicts with them, they win. If a flag described here is missing from `waddle --help`,
 the installed copy predates it: upgrade with `sudo apt install --only-upgrade waddle`
-(Debian/Ubuntu), `brew upgrade waddle` (macOS), or by re-running the install one-liner
-from the README.
+(Debian/Ubuntu) or by re-running the install one-liner from the README.
 
 ## Where waddle sits
 

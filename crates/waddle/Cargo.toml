@@ -29,9 +29,6 @@ sha2.workspace = true
 [dev-dependencies]
 docling-core.workspace = true
 
-[package.metadata.dist]
-formula = "waddle"
-
 [package.metadata.deb]
 maintainer = "David M. Anderson <david.anderson@excelano.com>"
 extended-description = """

@@ -30,8 +30,7 @@ Every install line ends with `waddle --install-skill`. That installs the [Claude
 
     cargo install waddle && waddle --install-skill
 
-Or `brew install excelano/tap/waddle && waddle --install-skill`, or on Windows
-`winget install Excelano.waddle`.
+On Windows, `winget install Excelano.waddle`.
 
 From the Excelano apt repository, add the repository once and it then updates
 with the rest of your system:
