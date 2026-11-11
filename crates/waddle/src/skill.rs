@@ -3,10 +3,10 @@
 //!
 //! The skill is compiled into the binary rather than shipped as a package data
 //! file, because the binary is the only artifact present on every install
-//! path: apt, `cargo install`, the curl one-liner, a prebuilt GitHub
-//! binary and a source build all produce it, and `cargo install` ships no data
-//! files at all. Embedding is what makes one instruction, `waddle
-//! --install-skill`, true everywhere. The contract is fleet-wide.
+//! path: apt, winget, `cargo install`, the Windows release zip and a source
+//! build all produce it, and `cargo install` ships no data files at all.
+//! Embedding is what makes one instruction, `waddle --install-skill`, true
+//! everywhere. The contract is fleet-wide.
 //!
 //! Author: David M. Anderson
 //! Built with AI assistance (Claude, Anthropic)
