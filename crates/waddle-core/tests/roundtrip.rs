@@ -462,6 +462,7 @@ fn list_item(ordered: bool, number: u64, first: bool, level: u8, text: &str) -> 
         text: text.into(),
         level,
         marker: None,
+        split: None,
         location: None,
         dclx: None,
         href: None,

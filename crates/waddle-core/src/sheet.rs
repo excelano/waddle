@@ -112,6 +112,7 @@ impl Walk {
             | Node::Commented { inner, .. }
             | Node::Track { inner, .. }
             | Node::DoclangOnly(inner) => self.node(inner),
+            Node::ProvContinuation { .. } => {}
             Node::Furniture { layer, .. } => self.warn(node, Reason::Layer(layer.value())),
             Node::FurnitureText { .. } => {
                 self.warn(node, Reason::Layer(ContentLayer::Furniture.value()))

@@ -40,6 +40,7 @@ pub fn kind(node: &Node) -> &'static str {
         Node::PictureChildren(_) => "picture_children",
         Node::PageBreak => "page_break",
         Node::PageInfo { .. } => "page_info",
+        Node::ProvContinuation { .. } => "prov_continuation",
         Node::Anchor { .. } => "anchor",
         Node::DoclangOnly(_) => "doclang_only",
         Node::TextDump(_) => "text_dump",

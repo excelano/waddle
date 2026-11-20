@@ -217,7 +217,8 @@ fn body_text(nodes: &[Node], out: &mut Vec<Piece>, anchors: &mut HashSet<String>
             | Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
-            | Node::PageInfo { .. } => {}
+            | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. } => {}
             // No text of its own.
             Node::Anchor { id } => {
                 anchors.insert(id.clone());
@@ -478,6 +479,7 @@ fn count(nodes: &[Node], want: Want, target: Target) -> usize {
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. }
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)

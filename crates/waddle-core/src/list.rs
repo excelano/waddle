@@ -66,6 +66,7 @@ fn item(node: &Node, warnings: &mut Vec<Warning>) -> Option<Item> {
         href,
         layer,
         marker: _,
+        split: _,
         location: _,
     } = node
     else {

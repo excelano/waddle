@@ -125,7 +125,7 @@ impl Writer {
                     node,
                     Reason::Layer(layer.as_ref().map_or("furniture", |l| l.value())),
                 ),
-                Node::Anchor { .. } | Node::PictureChildren(_) => {}
+                Node::Anchor { .. } | Node::PictureChildren(_) | Node::ProvContinuation { .. } => {}
                 Node::CommentSection { .. }
                 | Node::KeyValueGraph { .. }
                 | Node::PageFurniture { .. }
@@ -259,6 +259,7 @@ impl Writer {
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. } => {}
         }
     }
@@ -369,6 +370,7 @@ impl Writer {
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. } => {}
         }
     }
@@ -448,6 +450,7 @@ impl Writer {
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. } => {}
         }
     }
@@ -624,6 +627,7 @@ fn split<'a>(nodes: &[&'a Node]) -> Vec<Slide<'a>> {
             | Node::KeyValueGraph { .. }
             | Node::PictureChildren(_)
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. } => {
                 if slides.is_empty() {
                     slides.push(Slide::default());
@@ -669,6 +673,7 @@ fn takes_own_frame(node: &Node) -> bool {
         | Node::KeyValueGraph { .. }
         | Node::PictureChildren(_)
         | Node::PageInfo { .. }
+        | Node::ProvContinuation { .. }
         | Node::Anchor { .. } => false,
     }
 }

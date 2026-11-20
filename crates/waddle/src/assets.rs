@@ -150,6 +150,7 @@ fn collect<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Node>) {
             | Node::PageFurniture { .. }
             | Node::PageBreak
             | Node::PageInfo { .. }
+            | Node::ProvContinuation { .. }
             | Node::Anchor { .. }
             | Node::TextDump(_) => {}
         }

@@ -152,6 +152,7 @@ mod tests {
             text: text.into(),
             level,
             marker: None,
+            split: None,
             location: None,
             dclx: None,
             href: None,

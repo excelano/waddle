@@ -339,7 +339,7 @@ impl Writer {
             // Page geometry has no content to carry and is not worth a warning,
             // and the text inside a picture is JSON-only in every other
             // serializer.
-            Node::PageInfo { .. } | Node::PictureChildren(_) => {}
+            Node::PageInfo { .. } | Node::PictureChildren(_) | Node::ProvContinuation { .. } => {}
             Node::CommentSection { .. }
             | Node::KeyValueGraph { .. }
             | Node::PageFurniture { .. } => self.warn(node, Reason::Unsupported),
