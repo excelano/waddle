@@ -56,4 +56,6 @@ waddle is one of the tools around DocLang and docling.rs. Duckling converts docu
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). The licenses of the crates compiled into the
+binary are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which every
+package carries beside it.

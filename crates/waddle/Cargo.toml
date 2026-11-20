@@ -45,4 +45,5 @@ assets = [
     ["target/release/waddle", "usr/bin/", "755"],
     ["../../README.md", "usr/share/doc/waddle/README.md", "644"],
     ["../../LICENSE", "usr/share/doc/waddle/copyright", "644"],
+    ["../../THIRD-PARTY-NOTICES.txt", "usr/share/doc/waddle/THIRD-PARTY-NOTICES.txt", "644"],
 ]
